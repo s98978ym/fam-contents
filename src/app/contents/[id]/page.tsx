@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import {
   CHANNEL_LABELS,
-  StepRequirements,
+  CHANNEL_OPTIONS,
+  TASTE_OPTIONS,
+  WORD_COUNT_OPTIONS,
   StepGenerating,
   StepPreview,
   StepSavePublish,
@@ -45,14 +47,14 @@ interface CategorizedFiles {
 }
 
 // ---------------------------------------------------------------------------
-// Steps
+// Steps - simplified labels
 // ---------------------------------------------------------------------------
 
 const STEPS = [
-  { id: 1, label: "ファイル確認" },
-  { id: 2, label: "設定" },
+  { id: 1, label: "素材を確認" },
+  { id: 2, label: "チャネルを選ぶ" },
   { id: 3, label: "プレビュー" },
-  { id: 4, label: "保存・配信" },
+  { id: 4, label: "保存" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -83,13 +85,12 @@ function driveToWizardFiles(files: DriveFile[]): FileEntry[] {
 function generateMockAnalysis(files: DriveFile[]): string {
   const cats = categorize(files);
   const lines: string[] = [];
-  lines.push(`【AI分析結果】${files.length}件のファイルを分析しました。\n`);
-  if (cats.minutes.length > 0) lines.push(`- 議事録 ${cats.minutes.length}件: スポーツ栄養に関する企画議論が含まれています。`);
-  if (cats.transcripts.length > 0) lines.push(`- トランスクリプト ${cats.transcripts.length}件: 会議の文字起こしデータです。`);
-  if (cats.photos.length > 0) lines.push(`- 写真素材 ${cats.photos.length}件: ビジュアルコンテンツに使用できます。`);
-  if (cats.others.length > 0) lines.push(`- その他 ${cats.others.length}件: 参考資料として使用します。`);
-  lines.push("\n【推奨チャネル】Instagram Reels、note、LINEが効果的です。");
-  lines.push("\n【キーメッセージ候補】「試合前72時間の栄養摂取がパフォーマンスに影響する可能性がある」");
+  lines.push(`${files.length}件のファイルを分析しました。\n`);
+  if (cats.minutes.length > 0) lines.push(`議事録 ${cats.minutes.length}件から、スポーツ栄養に関する企画内容を検出しました。`);
+  if (cats.transcripts.length > 0) lines.push(`トランスクリプト ${cats.transcripts.length}件の文字起こしデータを確認しました。`);
+  if (cats.photos.length > 0) lines.push(`写真 ${cats.photos.length}件をビジュアル素材として使用できます。`);
+  if (cats.others.length > 0) lines.push(`その他 ${cats.others.length}件を参考資料として使用します。`);
+  lines.push("\nおすすめ: Instagram Reels、note記事、LINE配信の組み合わせが効果的です。");
   return lines.join("\n");
 }
 
@@ -109,73 +110,35 @@ function generateMockContent(channel: string): Record<string, unknown> {
     };
   }
   if (channel === "instagram_feed") {
-    return {
-      slide1_cover: "知らないと損する\n試合前食事の3つのNG",
-      slide2_misconception: "「試合直前にがっつり食べればOK」と思っていませんか？",
-      slide3_truth: "研究では、試合3日前からの段階的な炭水化物摂取が筋グリコーゲンを最大2倍にする可能性が示されています",
-      slide4_practice: "3日前から白米を1.5倍に\nパスタ・うどんもOK\n脂質は控えめに",
-      slide5_cta: "無料体験はプロフィールのリンクから",
-      caption: "試合前の食事戦略、正しく知っていますか？",
-      disclaimer: "※個人差があります。",
-    };
+    return { slide1_cover: "知らないと損する\n試合前食事の3つのNG", slide2_misconception: "「試合直前にがっつり食べればOK」と思っていませんか？", slide3_truth: "研究では、試合3日前からの段階的な炭水化物摂取が効果的とされています", slide4_practice: "3日前から白米を1.5倍に\nパスタ・うどんもOK", slide5_cta: "無料体験はプロフィールのリンクから", caption: "試合前の食事戦略、正しく知っていますか？", disclaimer: "※個人差があります。" };
   }
   if (channel === "note") {
-    return {
-      title_option1: "試合前72時間で差がつく3つの栄養戦略",
-      title_option2: "あなたの試合前の食事、本当に正しい？",
-      title_option3: "カーボローディングの科学が教えるパフォーマンス最大化",
-      lead: "試合前の食事が結果を左右する。科学的根拠に基づいた栄養戦略を解説します。",
-      body_markdown: "## はじめに\n\nスポーツの世界では「試合前に何を食べるか」が議論されてきました。\n\n## カーボローディングとは\n\n試合前に計画的に炭水化物を摂取し、筋グリコーゲンを最大化する手法です。\n\n## まとめ\n\n科学的根拠に基づいて計画的に行うことが重要です。",
-      tags: ["スポーツ栄養", "カーボローディング", "試合前食事"],
-      og_text: "試合前72時間の栄養戦略",
-      cta_label: "無料体験に申し込む",
-      cta_url: "https://fam.example.com/academy/trial",
-      disclaimer: "※一般的な情報提供を目的としており、個別の医療的アドバイスではありません。",
-    };
+    return { title_option1: "試合前72時間で差がつく3つの栄養戦略", title_option2: "あなたの試合前の食事、本当に正しい？", lead: "科学的根拠に基づいた栄養戦略を解説します。", body_markdown: "## はじめに\n\nスポーツの世界では「試合前に何を食べるか」が議論されてきました。\n\n## カーボローディングとは\n\n試合前に計画的に炭水化物を摂取し、筋グリコーゲンを最大化する手法です。\n\n## まとめ\n\n科学的根拠に基づいて計画的に行うことが重要です。", tags: ["スポーツ栄養", "カーボローディング"], og_text: "試合前72時間の栄養戦略", cta_label: "無料体験に申し込む", cta_url: "https://fam.example.com/academy/trial", disclaimer: "※一般的な情報提供です。" };
   }
   if (channel === "event_lp") {
-    return {
-      title: "スポーツ栄養アカデミー 無料体験セミナー",
-      subtitle: "科学に基づく栄養戦略で、パフォーマンスを次のレベルへ",
-      event_date: "2026-03-15T14:00",
-      event_location: "オンライン（Zoom）",
-      event_price: "無料",
-      cta_text: "今すぐ申し込む",
-      benefits: ["最新のスポーツ栄養学を基礎から学べる", "現役管理栄養士に直接質問できる"],
-      faqs: [{ q: "栄養の知識がなくても参加できますか？", a: "はい、初心者向けです。" }],
-      meta_title: "スポーツ栄養アカデミー 無料体験セミナー | FAM",
-      meta_description: "科学に基づくスポーツ栄養戦略を学べる無料オンラインセミナー。",
-      disclaimer: "※内容は予告なく変更になる場合があります。",
-    };
+    return { title: "スポーツ栄養アカデミー 無料体験セミナー", subtitle: "科学に基づく栄養戦略で、パフォーマンスを次のレベルへ", event_date: "2026-03-15T14:00", event_location: "オンライン（Zoom）", event_price: "無料", cta_text: "今すぐ申し込む", benefits: ["最新のスポーツ栄養学を基礎から学べる", "現役管理栄養士に直接質問できる"], faqs: [{ q: "知識がなくても参加できますか？", a: "はい、初心者向けです。" }], meta_title: "スポーツ栄養アカデミー 無料体験 | FAM", meta_description: "科学に基づくスポーツ栄養戦略を学べる無料セミナー。", disclaimer: "※内容は予告なく変更になる場合があります。" };
   }
   if (channel === "line") {
-    return {
-      delivery_type: "broadcast",
-      segment: "academy_student",
-      message_text: "【NEW】試合前の食事、なんとなくで決めてませんか？\n\n科学的な栄養戦略を学べる無料体験、受付中！",
-      cta_label: "詳細・お申し込みはこちら",
-      step_messages: [
-        { timing: "7日前", content: "無料体験まであと1週間！" },
-        { timing: "前日", content: "明日14:00からスタート！" },
-        { timing: "翌日", content: "ご参加ありがとうございました！" },
-      ],
-    };
+    return { delivery_type: "broadcast", segment: "academy_student", message_text: "【NEW】試合前の食事、なんとなくで決めてませんか？\n\n科学的な栄養戦略を学べる無料体験、受付中！", cta_label: "詳細はこちら", step_messages: [{ timing: "7日前", content: "無料体験まであと1週間！" }, { timing: "前日", content: "明日14:00からスタート！" }, { timing: "翌日", content: "ご参加ありがとうございました！" }] };
+  }
+  if (channel === "instagram_stories") {
+    return { story_type: "poll", poll_question: "試合前に炭水化物、意識してる？", slides: [{ text: "試合前の食事で\nパフォーマンスが変わる？", image_note: "食事写真" }, { text: "72時間前からの\n栄養戦略がカギ", image_note: "タイムライン" }, { text: "詳しくはReelsで！", image_note: "Reelsサムネ" }] };
   }
   return { message: "生成コンテンツ" };
 }
 
 // ---------------------------------------------------------------------------
-// Category UI config
+// Category card config
 // ---------------------------------------------------------------------------
 
 const CATEGORY_CONFIG = [
-  { key: "minutes", label: "議事録", icon: "\uD83D\uDCDD", color: "blue" },
-  { key: "transcripts", label: "トランスクリプト", icon: "\uD83D\uDDE3\uFE0F", color: "purple" },
-  { key: "photos", label: "写真", icon: "\uD83D\uDCF7", color: "green" },
-  { key: "others", label: "その他", icon: "\uD83D\uDCCE", color: "gray" },
-] as const;
+  { key: "minutes" as const, label: "議事録", color: "blue" },
+  { key: "transcripts" as const, label: "トランスクリプト", color: "purple" },
+  { key: "photos" as const, label: "写真", color: "green" },
+  { key: "others" as const, label: "その他", color: "gray" },
+];
 
-const COLOR_MAP: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+const COLOR: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   blue: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-700" },
   purple: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-700" },
   green: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", badge: "bg-green-100 text-green-700" },
@@ -194,23 +157,16 @@ export default function FolderDetailPage() {
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(1);
-  const [promptVersions, setPromptVersions] = useState<{ id: string; name: string; type: string; version: number }[]>([]);
 
-  // Upload state
-  const [dragOver, setDragOver] = useState(false);
+  // File add
   const [showAddFile, setShowAddFile] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [newFileCategory, setNewFileCategory] = useState<DriveFile["category"]>("other");
 
-  // Wizard state
+  // Wizard
   const [wizardFiles, setWizardFiles] = useState<FileEntry[]>([]);
   const [settings, setSettings] = useState<GenerationSettings>({
-    channel: "",
-    customInstructions: "",
-    taste: "scientific",
-    wordCount: "",
-    imageHandling: "none",
-    promptVersionId: "",
+    channel: "", customInstructions: "", taste: "scientific", wordCount: "", imageHandling: "none", promptVersionId: "",
   });
   const [aiAnalysis, setAiAnalysis] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -218,41 +174,33 @@ export default function FolderDetailPage() {
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Fetch folder + files + prompt versions
   useEffect(() => {
     Promise.all([
       fetch("/api/drive/folders").then((r) => r.json()),
       fetch(`/api/drive/files?folderId=${folderId}`).then((r) => r.json()),
-      fetch("/api/prompt-versions").then((r) => r.json()),
-    ]).then(([folders, files, pvs]) => {
-      const f = (folders as DriveFolder[]).find((fd) => fd.id === folderId) ?? null;
-      setFolder(f);
+    ]).then(([folders, files]) => {
+      setFolder((folders as DriveFolder[]).find((fd) => fd.id === folderId) ?? null);
       setDriveFiles(files);
       setWizardFiles(driveToWizardFiles(files));
-      setPromptVersions(pvs);
       setLoading(false);
     });
   }, [folderId]);
 
-  // Handlers
   const handleAnalyze = useCallback(() => {
     setAnalyzing(true);
-    setTimeout(() => {
-      setAiAnalysis(generateMockAnalysis(driveFiles));
-      setAnalyzing(false);
-    }, 1500);
+    setTimeout(() => { setAiAnalysis(generateMockAnalysis(driveFiles)); setAnalyzing(false); }, 1500);
   }, [driveFiles]);
 
   const handleGenerate = useCallback(() => {
     setGenerating(true);
     setStep(3);
     setTimeout(() => {
-      const content = generateMockContent(settings.channel);
       setPreview({
         channel: settings.channel,
         channelLabel: CHANNEL_LABELS[settings.channel] ?? settings.channel,
-        generatedContent: content,
+        generatedContent: generateMockContent(settings.channel),
         files: wizardFiles,
         settings,
         aiAnalysis,
@@ -265,33 +213,19 @@ export default function FolderDetailPage() {
     setPreview((prev) => prev ? { ...prev, generatedContent: { ...prev.generatedContent, [key]: value } } : prev);
   }, []);
 
-  const handleTogglePhotoSelect = useCallback((fileId: string) => {
-    setWizardFiles((prev) => prev.map((f) => f.id === fileId ? { ...f, selected: !f.selected } : f));
-  }, []);
-
-  const handleSetEyecatch = useCallback((fileId: string) => {
-    setWizardFiles((prev) => prev.map((f) => f.id === fileId ? { ...f, isEyecatch: true } : { ...f, isEyecatch: false }));
-  }, []);
-
   const handleSave = useCallback(async () => {
     if (!preview) return;
     setSaving(true);
     const res = await fetch("/api/variants", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        channel: preview.channel,
-        content_id: `folder_${folderId}`,
-        ...preview.generatedContent,
-      }),
+      body: JSON.stringify({ channel: preview.channel, content_id: `folder_${folderId}`, ...preview.generatedContent }),
     });
     if (res.ok) setSaved(true);
     setSaving(false);
   }, [preview, folderId]);
 
-  const handlePublish = useCallback(() => {
-    window.location.href = "/contents";
-  }, []);
+  const handlePublish = useCallback(() => { window.location.href = "/contents/list"; }, []);
 
   async function handleAddFile() {
     if (!newFileName.trim()) return;
@@ -311,25 +245,23 @@ export default function FolderDetailPage() {
 
   const canProceed = (s: number) => {
     if (s === 1) return driveFiles.length > 0;
-    if (s === 2) return !!settings.channel && !!settings.taste;
+    if (s === 2) return !!settings.channel;
     if (s === 3) return !!preview;
     return true;
   };
 
-  if (loading) return <div className="text-center py-12 text-gray-400">読み込み中...</div>;
-  if (!folder) return <div className="text-center py-12 text-gray-400">フォルダが見つかりません</div>;
+  if (loading) return <div className="text-center py-16 text-gray-400">読み込み中...</div>;
+  if (!folder) return <div className="text-center py-16 text-gray-400">フォルダが見つかりません</div>;
 
   const categorized = categorize(driveFiles);
+  const wordCountOpts = WORD_COUNT_OPTIONS[settings.channel] ?? [];
 
   return (
     <div>
       {/* Header */}
       <div className="mb-6">
-        <a href="/contents" className="text-sm text-blue-600 hover:underline mb-2 inline-block">&larr; フォルダ一覧に戻る</a>
+        <a href="/contents" className="text-sm text-blue-600 hover:underline mb-2 inline-block">&larr; フォルダ一覧</a>
         <h2 className="text-2xl font-bold">{folder.name}</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Google Driveフォルダ内のファイルを確認し、AIでコンテンツを生成します。
-        </p>
       </div>
 
       {/* Stepper */}
@@ -340,114 +272,78 @@ export default function FolderDetailPage() {
               key={s.id}
               onClick={() => { if (!generating && (s.id <= step || canProceed(s.id - 1))) setStep(s.id); }}
               disabled={generating}
-              className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium border-b-2 transition-colors ${
-                step === s.id
-                  ? "border-blue-600 text-blue-600 bg-blue-50"
-                  : s.id < step
-                  ? "border-green-500 text-green-600 bg-green-50"
+              className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-medium border-b-2 transition-colors ${
+                step === s.id ? "border-blue-600 text-blue-600 bg-blue-50"
+                  : s.id < step ? "border-green-500 text-green-600 bg-green-50"
                   : "border-transparent text-gray-400"
               }`}
             >
               <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                 step === s.id ? "bg-blue-600 text-white" : s.id < step ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500"
-              }`}>
-                {s.id < step ? "\u2713" : s.id}
-              </span>
+              }`}>{s.id < step ? "\u2713" : s.id}</span>
               {s.label}
             </button>
           ))}
         </div>
 
         <div className="p-6">
-          {/* Step 1: Files (blog-cms style categorized view) */}
+          {/* ----------------------------------------------------------- */}
+          {/* Step 1: Files                                                */}
+          {/* ----------------------------------------------------------- */}
           {step === 1 && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-800">ファイル一覧</h3>
-                  <p className="text-xs text-gray-500 mt-1">
-                    フォルダ内のファイルが自動分類されています。ファイルを追加することもできます。
-                  </p>
+                  <h3 className="font-bold text-gray-800">フォルダ内の素材</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">AIが以下のファイルを参考にしてコンテンツを生成します。</p>
                 </div>
-                <button
-                  onClick={() => setShowAddFile(true)}
-                  className="px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700"
-                >
+                <button onClick={() => setShowAddFile(!showAddFile)} className="px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700">
                   + ファイル追加
                 </button>
               </div>
 
-              {/* Drag & drop zone */}
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => { e.preventDefault(); setDragOver(false); }}
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-gray-50"}`}
-              >
-                <p className="text-sm text-gray-500">ファイルをドラッグ＆ドロップしてアップロード</p>
-              </div>
-
-              {/* Add file modal */}
               {showAddFile && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="grid grid-cols-12 gap-3 items-end">
-                    <div className="col-span-5">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1">
                       <label className="block text-xs font-medium text-gray-600 mb-1">ファイル名</label>
-                      <input
-                        value={newFileName}
-                        onChange={(e) => setNewFileName(e.target.value)}
-                        placeholder="例: meeting_notes.docx"
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full"
-                        onKeyDown={(e) => { if (e.key === "Enter") handleAddFile(); }}
-                        autoFocus
-                      />
+                      <input value={newFileName} onChange={(e) => setNewFileName(e.target.value)} placeholder="例: meeting_notes.docx" className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full" onKeyDown={(e) => { if (e.key === "Enter") handleAddFile(); }} autoFocus />
                     </div>
-                    <div className="col-span-3">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">カテゴリ</label>
-                      <select
-                        value={newFileCategory}
-                        onChange={(e) => setNewFileCategory(e.target.value as DriveFile["category"])}
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full"
-                      >
+                    <div className="w-40">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">種類</label>
+                      <select value={newFileCategory} onChange={(e) => setNewFileCategory(e.target.value as DriveFile["category"])} className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full">
                         <option value="minutes">議事録</option>
                         <option value="transcript">トランスクリプト</option>
                         <option value="photo">写真</option>
                         <option value="other">その他</option>
                       </select>
                     </div>
-                    <div className="col-span-2">
-                      <button onClick={handleAddFile} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm w-full hover:bg-blue-700">追加</button>
-                    </div>
-                    <div className="col-span-2">
-                      <button onClick={() => setShowAddFile(false)} className="border border-gray-300 px-4 py-2 rounded-md text-sm w-full hover:bg-gray-50">閉じる</button>
-                    </div>
+                    <button onClick={handleAddFile} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 shrink-0">追加</button>
                   </div>
                 </div>
               )}
 
-              {/* Categorized files (blog-cms style) */}
               {driveFiles.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-lg">
-                  ファイルがありません。「+ ファイル追加」からファイルを追加してください。
+                <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-lg text-gray-400 text-sm">
+                  ファイルがありません。「+ ファイル追加」で素材を追加してください。
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {CATEGORY_CONFIG.map((cat) => {
-                    const items = categorized[cat.key as keyof CategorizedFiles];
+                    const items = categorized[cat.key];
                     if (items.length === 0) return null;
-                    const colors = COLOR_MAP[cat.color];
+                    const c = COLOR[cat.color];
                     return (
-                      <div key={cat.key} className={`${colors.bg} ${colors.border} border rounded-lg p-4`}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-lg">{cat.icon}</span>
-                          <span className={`text-sm font-bold ${colors.text}`}>{cat.label}</span>
-                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${colors.badge}`}>{items.length}</span>
+                      <div key={cat.key} className={`${c.bg} ${c.border} border rounded-lg p-4`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-sm font-bold ${c.text}`}>{cat.label}</span>
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${c.badge}`}>{items.length}件</span>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {items.map((f) => (
                             <div key={f.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2 shadow-sm">
-                              <span className="text-sm font-medium">{f.name}</span>
-                              <span className="text-xs text-gray-400">{f.mimeType}</span>
+                              <span className="text-sm">{f.name}</span>
+                              <span className="text-xs text-gray-400">{f.mimeType.split("/").pop()}</span>
                             </div>
                           ))}
                         </div>
@@ -459,43 +355,141 @@ export default function FolderDetailPage() {
             </div>
           )}
 
-          {/* Step 2: Settings */}
+          {/* ----------------------------------------------------------- */}
+          {/* Step 2: Simplified settings                                  */}
+          {/* ----------------------------------------------------------- */}
           {step === 2 && (
-            <StepRequirements
-              files={wizardFiles}
-              settings={settings}
-              setSettings={setSettings}
-              promptVersions={promptVersions}
-              aiAnalysis={aiAnalysis}
-              setAiAnalysis={setAiAnalysis}
-              onAnalyze={handleAnalyze}
-              analyzing={analyzing}
-              onTogglePhotoSelect={handleTogglePhotoSelect}
-              onSetEyecatch={handleSetEyecatch}
-            />
+            <div className="space-y-6">
+              {/* AI Analysis - single button */}
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">AI分析</h3>
+                <p className="text-sm text-gray-500 mb-3">ボタンを押すと、素材をAIが分析してコンテンツの方向性を提案します。</p>
+                <button onClick={handleAnalyze} disabled={analyzing} className={`px-5 py-2.5 rounded-md text-sm font-medium ${analyzing ? "bg-gray-200 text-gray-500" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}>
+                  {analyzing ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />分析中...
+                    </span>
+                  ) : "素材を分析する"}
+                </button>
+                {aiAnalysis && (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mt-3 text-sm text-gray-700 whitespace-pre-wrap">
+                    {aiAnalysis}
+                  </div>
+                )}
+              </div>
+
+              {/* Channel - large visual buttons */}
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">どのチャネルで配信しますか？</h3>
+                <p className="text-sm text-gray-500 mb-3">配信先を1つ選んでください。</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {CHANNEL_OPTIONS.filter((g) => g.group !== "将来拡張").flatMap((g) =>
+                    g.items.filter((item) => !("disabled" in item && item.disabled)).map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setSettings({ ...settings, channel: item.value, wordCount: "" })}
+                        className={`p-4 rounded-lg border-2 text-left transition-all ${
+                          settings.channel === item.value
+                            ? "border-blue-500 bg-blue-50 shadow-sm"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <span className="text-sm font-medium block">{item.label.split("（")[0]}</span>
+                        {item.label.includes("（") && (
+                          <span className="text-xs text-gray-400 block mt-0.5">
+                            {item.label.match(/（(.+)）/)?.[1]}
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {settings.channel && (
+                <>
+                  {/* Taste - simple pills */}
+                  <div>
+                    <h3 className="font-bold text-gray-800 mb-1">トーン（雰囲気）</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {TASTE_OPTIONS.map((t) => (
+                        <button
+                          key={t.value}
+                          type="button"
+                          onClick={() => setSettings({ ...settings, taste: t.value })}
+                          className={`px-4 py-2 rounded-full text-sm border transition-all ${
+                            settings.taste === t.value ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Word count - if available */}
+                  {wordCountOpts.length > 0 && (
+                    <div>
+                      <h3 className="font-bold text-gray-800 mb-1">ボリューム</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {wordCountOpts.map((w) => (
+                          <button
+                            key={w.value}
+                            type="button"
+                            onClick={() => setSettings({ ...settings, wordCount: w.value })}
+                            className={`px-4 py-2 rounded-full text-sm border transition-all ${
+                              settings.wordCount === w.value ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {w.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Advanced settings - collapsible */}
+                  <div>
+                    <button
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                    >
+                      <span className={`transform transition-transform ${showAdvanced ? "rotate-90" : ""}`}>&rsaquo;</span>
+                      詳細設定（任意）
+                    </button>
+                    {showAdvanced && (
+                      <div className="mt-3 bg-gray-50 rounded-lg p-4 space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">カスタム指示</label>
+                          <textarea
+                            value={settings.customInstructions}
+                            onChange={(e) => setSettings({ ...settings, customInstructions: e.target.value })}
+                            rows={2}
+                            placeholder="AIへの追加指示があれば入力（例: 初心者向けに、免責文を入れて）"
+                            className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">プロンプトバージョン</label>
+                          <p className="text-xs text-gray-400">
+                            <a href="/prompt-versions" className="text-blue-500 underline">プロンプト管理</a> で設定したカスタムプロンプトを使用できます。
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
-          {/* Step 3: Generating / Preview */}
+          {/* Step 3: Preview */}
           {step === 3 && generating && <StepGenerating channel={settings.channel} />}
-          {step === 3 && !generating && (
-            <StepPreview
-              preview={preview}
-              onRegenerate={handleGenerate}
-              generating={generating}
-              onUpdateContent={handleUpdateContent}
-            />
-          )}
+          {step === 3 && !generating && <StepPreview preview={preview} onRegenerate={handleGenerate} generating={generating} onUpdateContent={handleUpdateContent} />}
 
-          {/* Step 4: Save & Publish */}
-          {step === 4 && (
-            <StepSavePublish
-              preview={preview}
-              onSave={handleSave}
-              onPublish={handlePublish}
-              saving={saving}
-              saved={saved}
-            />
-          )}
+          {/* Step 4: Save */}
+          {step === 4 && <StepSavePublish preview={preview} onSave={handleSave} onPublish={handlePublish} saving={saving} saved={saved} />}
         </div>
 
         {/* Navigation */}
@@ -507,36 +501,20 @@ export default function FolderDetailPage() {
           >
             &larr; 戻る
           </button>
-          <span className="text-xs text-gray-400">Step {step} / {STEPS.length}</span>
-          {step < 3 && (
-            <div className="flex gap-2">
-              {step === 1 && (
-                <button
-                  onClick={() => setStep(2)}
-                  disabled={!canProceed(1)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${!canProceed(1) ? "bg-gray-200 text-gray-400" : "bg-blue-600 text-white hover:bg-blue-700"}`}
-                >
-                  設定へ &rarr;
-                </button>
-              )}
-              {step === 2 && (
-                <button
-                  onClick={handleGenerate}
-                  disabled={generating || !canProceed(2)}
-                  className={`px-6 py-2 rounded-md text-sm font-medium ${generating || !canProceed(2) ? "bg-gray-200 text-gray-400" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}
-                >
-                  生成してプレビュー &rarr;
-                </button>
-              )}
-            </div>
+          <span className="text-xs text-gray-400">ステップ {step} / {STEPS.length}</span>
+          {step === 1 && (
+            <button onClick={() => setStep(2)} disabled={!canProceed(1)} className={`px-5 py-2 rounded-md text-sm font-medium ${!canProceed(1) ? "bg-gray-200 text-gray-400" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+              次へ &rarr;
+            </button>
+          )}
+          {step === 2 && (
+            <button onClick={handleGenerate} disabled={generating || !canProceed(2)} className={`px-6 py-2 rounded-md text-sm font-medium ${generating || !canProceed(2) ? "bg-gray-200 text-gray-400" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}>
+              AIで生成する &rarr;
+            </button>
           )}
           {step === 3 && !generating && (
-            <button
-              onClick={() => setStep(4)}
-              disabled={!preview}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${!preview ? "bg-gray-200 text-gray-400" : "bg-blue-600 text-white hover:bg-blue-700"}`}
-            >
-              保存・配信へ &rarr;
+            <button onClick={() => setStep(4)} disabled={!preview} className={`px-5 py-2 rounded-md text-sm font-medium ${!preview ? "bg-gray-200 text-gray-400" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+              保存へ &rarr;
             </button>
           )}
           {(step === 3 && generating) && <div />}
