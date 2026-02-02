@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -94,6 +94,139 @@ function daysUntilDeletion(deletedAt: string): number {
   return Math.max(0, diff);
 }
 
+function loadMembers(): string[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem("registered_members") ?? "[]"); } catch { return []; }
+}
+
+function saveMembers(members: string[]) {
+  localStorage.setItem("registered_members", JSON.stringify(members));
+}
+
+/** Simple fuzzy: check if all chars of query appear in order in target */
+function fuzzyMatch(query: string, target: string): number {
+  const q = query.toLowerCase();
+  const t = target.toLowerCase();
+  if (t.includes(q)) return 2; // exact substring = highest
+  let qi = 0;
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) qi++;
+  }
+  return qi === q.length ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// AssigneeCombobox
+// ---------------------------------------------------------------------------
+
+function AssigneeCombobox({ value, members, onChange, onRemoveMember }: {
+  value: string;
+  members: string[];
+  onChange: (val: string) => void;
+  onRemoveMember: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = query
+    ? members
+        .map((m) => ({ name: m, score: fuzzyMatch(query, m) }))
+        .filter((m) => m.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((m) => m.name)
+    : members;
+
+  const showAddNew = query && !members.includes(query) && query.trim().length > 0;
+
+  function select(val: string) {
+    onChange(val);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setTimeout(() => inputRef.current?.focus(), 0); }}
+        className={`text-xs rounded-md border px-2 py-1.5 outline-none cursor-pointer min-w-[80px] text-left ${
+          value ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-400"
+        }`}
+      >
+        {value || "担当者"}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg w-56 overflow-hidden">
+          <div className="p-1.5 border-b border-gray-100">
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && showAddNew) { select(query.trim()); }
+                if (e.key === "Escape") setOpen(false);
+              }}
+              placeholder="名前で検索 / 新規入力..."
+              className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded outline-none focus:border-indigo-300"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {value && (
+              <button
+                onClick={() => select("")}
+                className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-gray-50"
+              >
+                担当を解除
+              </button>
+            )}
+            {filtered.map((m) => (
+              <div key={m} className="flex items-center group">
+                <button
+                  onClick={() => select(m)}
+                  className={`flex-1 text-left px-3 py-2 text-xs hover:bg-indigo-50 ${
+                    m === value ? "text-indigo-700 font-medium bg-indigo-50/50" : "text-gray-700"
+                  }`}
+                >
+                  {m}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRemoveMember(m); }}
+                  className="px-2 py-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title={`${m} を削除`}
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            ))}
+            {showAddNew && (
+              <button
+                onClick={() => select(query.trim())}
+                className="w-full text-left px-3 py-2 text-xs text-indigo-600 hover:bg-indigo-50 border-t border-gray-100"
+              >
+                + &quot;{query.trim()}&quot; を追加
+              </button>
+            )}
+            {filtered.length === 0 && !showAddNew && (
+              <div className="px-3 py-3 text-xs text-gray-400 text-center">該当なし</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -108,6 +241,7 @@ export default function ContentsListPage() {
   const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
   const [trashedItems, setTrashedItems] = useState<TrashedItem[]>([]);
   const [toast, setToast] = useState("");
+  const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
 
   // Hydrate from localStorage after mount
   useEffect(() => {
@@ -115,6 +249,7 @@ export default function ContentsListPage() {
     const items = loadTrashed().filter((t) => daysUntilDeletion(t.deletedAt) > 0);
     saveTrashed(items);
     setTrashedItems(items);
+    setRegisteredMembers(loadMembers());
   }, []);
 
   const trashedIds = new Set(trashedItems.map((t) => t.variantId));
@@ -206,15 +341,26 @@ export default function ContentsListPage() {
     showToast("完全に削除しました");
   }
 
-  function handleAssigneeChange(e: React.MouseEvent, variantId: string, newAssignee: string) {
-    e.preventDefault();
-    e.stopPropagation();
+  function handleAssigneeChange(variantId: string, newAssignee: string) {
     setVariants((prev) => prev.map((v) => v.id === variantId ? { ...v, assignee: newAssignee || undefined } : v));
     // Persist overrides
     const overrides = JSON.parse(localStorage.getItem("assignee_overrides") ?? "{}");
     overrides[variantId] = newAssignee;
     localStorage.setItem("assignee_overrides", JSON.stringify(overrides));
+    // Auto-register new member
+    if (newAssignee && !registeredMembers.includes(newAssignee)) {
+      const next = [...registeredMembers, newAssignee].sort();
+      setRegisteredMembers(next);
+      saveMembers(next);
+    }
     showToast(newAssignee ? `担当: ${newAssignee}` : "担当を解除しました");
+  }
+
+  function handleRemoveMember(name: string) {
+    const next = registeredMembers.filter((m) => m !== name);
+    setRegisteredMembers(next);
+    saveMembers(next);
+    showToast(`${name} をメンバーから削除しました`);
   }
 
   // --- Compute effective status ---
@@ -223,8 +369,8 @@ export default function ContentsListPage() {
     return STATUS_STYLE[v.status] ?? STATUS_STYLE.draft;
   }
 
-  // --- Known assignees ---
-  const allAssignees = [...new Set(variants.map((v) => v.assignee).filter(Boolean) as string[])].sort();
+  // --- Known assignees (registered + from data) ---
+  const allAssignees = [...new Set([...registeredMembers, ...variants.map((v) => v.assignee).filter(Boolean) as string[]])].sort();
 
   // --- Filter logic ---
   const activeVariants = variants.filter((v) => !archivedIds.has(v.id) && !trashedIds.has(v.id));
@@ -444,17 +590,12 @@ export default function ContentsListPage() {
                   {/* Assignee + Action buttons */}
                   <div className="flex items-center gap-2 shrink-0">
                     {viewMode !== "trash" && (
-                      <select
+                      <AssigneeCombobox
                         value={v.assignee ?? ""}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => { e.stopPropagation(); handleAssigneeChange(e as unknown as React.MouseEvent, v.id, e.target.value); }}
-                        className={`text-xs rounded-md border px-2 py-1.5 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer ${
-                          v.assignee ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-400"
-                        }`}
-                      >
-                        <option value="">担当者</option>
-                        {allAssignees.map((a) => <option key={a} value={a}>{a}</option>)}
-                      </select>
+                        members={allAssignees}
+                        onChange={(val) => handleAssigneeChange(v.id, val)}
+                        onRemoveMember={handleRemoveMember}
+                      />
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">

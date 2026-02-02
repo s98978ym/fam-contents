@@ -207,9 +207,14 @@ export default function CampaignsPage() {
     return map;
   }, []);
 
+  const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
+  useEffect(() => {
+    try { setRegisteredMembers(JSON.parse(localStorage.getItem("registered_members") ?? "[]")); } catch { /* */ }
+  }, []);
+
   const allAssignees = useMemo(() =>
-    [...new Set(variants.map((v) => v.assignee).filter(Boolean) as string[])].sort()
-  , [variants]);
+    [...new Set([...registeredMembers, ...variants.map((v) => v.assignee).filter(Boolean) as string[]])].sort()
+  , [variants, registeredMembers]);
 
   function getVariantsForCampaign(contentIds: string[]) {
     return variants.filter((v) => contentIds.includes(v.content_id));
