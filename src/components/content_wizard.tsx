@@ -650,11 +650,11 @@ export function StepPreview({
 
 function ChannelPreviewRenderer({ channel, content, onUpdate }: { channel: string; content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   if (channel.startsWith("instagram_reels")) return <ReelsPreview content={content} onUpdate={onUpdate} />;
-  if (channel.startsWith("instagram_stories")) return <StoriesPreview content={content} />;
+  if (channel.startsWith("instagram_stories")) return <StoriesPreview content={content} onUpdate={onUpdate} />;
   if (channel.startsWith("instagram_feed")) return <FeedPreview content={content} onUpdate={onUpdate} />;
   if (channel === "event_lp") return <LPPreview content={content} onUpdate={onUpdate} />;
   if (channel === "note") return <NotePreview content={content} onUpdate={onUpdate} />;
-  if (channel === "line") return <LinePreview content={content} />;
+  if (channel === "line") return <LinePreview content={content} onUpdate={onUpdate} />;
   return <pre className="text-xs font-mono whitespace-pre-wrap">{JSON.stringify(content, null, 2)}</pre>;
 }
 
@@ -667,25 +667,39 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function EditableText({ text, fieldKey, onUpdate }: { text: unknown; fieldKey?: string; onUpdate?: (key: string, value: string) => void }) {
-  if (!text) return <span className="text-gray-300 text-sm">-</span>;
+function EditableText({ text, fieldKey, onUpdate, className: extra }: { text: unknown; fieldKey?: string; onUpdate?: (key: string, value: string) => void; className?: string }) {
+  if (!text && !onUpdate) return <span className="text-gray-300 text-sm">-</span>;
   return (
     <p
-      className="text-sm whitespace-pre-wrap outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200 rounded px-1 -mx-1 transition-colors"
+      className={`text-sm whitespace-pre-wrap outline-none rounded px-1 -mx-1 transition-colors ${onUpdate ? "focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200 hover:bg-yellow-50/50 cursor-text" : ""} ${extra ?? ""}`}
       contentEditable={!!onUpdate}
       suppressContentEditableWarning
       onBlur={(e) => {
         if (onUpdate && fieldKey) onUpdate(fieldKey, e.currentTarget.textContent ?? "");
       }}
     >
-      {String(text)}
+      {String(text ?? "")}
     </p>
   );
 }
 
-function PreviewText({ text }: { text: unknown }) {
-  if (!text) return <span className="text-gray-300 text-sm">-</span>;
-  return <p className="text-sm whitespace-pre-wrap">{String(text)}</p>;
+function EditableTags({ tags, fieldKey, onUpdate }: { tags: string[]; fieldKey: string; onUpdate?: (key: string, value: string) => void }) {
+  if (!onUpdate) {
+    return <div className="flex flex-wrap gap-1">{tags.map((t, i) => <span key={i} className="px-2 py-0.5 text-xs bg-gray-100 rounded">{t}</span>)}</div>;
+  }
+  return (
+    <div>
+      <div
+        className="text-sm outline-none rounded px-1 -mx-1 transition-colors focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200 hover:bg-yellow-50/50 cursor-text"
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={(e) => onUpdate(fieldKey, e.currentTarget.textContent ?? "")}
+      >
+        {tags.join(", ")}
+      </div>
+      <p className="text-xs text-gray-400 mt-1">カンマ区切りで編集できます</p>
+    </div>
+  );
 }
 
 function ReelsPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
@@ -707,27 +721,32 @@ function ReelsPreview({ content, onUpdate }: { content: Record<string, unknown>;
       <div className="border-t pt-3">
         <Section title="サムネイル"><EditableText text={content.thumbnail_text} fieldKey="thumbnail_text" onUpdate={onUpdate} /></Section>
         <Section title="キャプション"><EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} /></Section>
-        {Array.isArray(content.hashtags) && <Section title="ハッシュタグ"><div className="flex flex-wrap gap-1">{(content.hashtags as string[]).map((h, i) => <span key={i} className="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded">#{h}</span>)}</div></Section>}
+        {Array.isArray(content.hashtags) && <Section title="ハッシュタグ"><EditableTags tags={(content.hashtags as string[])} fieldKey="hashtags" onUpdate={onUpdate} /></Section>}
       </div>
-      <div className="bg-yellow-50 rounded p-3 text-xs text-yellow-700"><PreviewText text={content.disclaimer} /></div>
+      <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
     </div>
   );
 }
 
-function StoriesPreview({ content }: { content: Record<string, unknown> }) {
+function StoriesPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const slides = content.slides as { text: string; image_note: string }[] | undefined;
   return (
     <div>
-      <Section title="タイプ"><span className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded">{String(content.story_type ?? "-")}</span></Section>
-      {!!content.poll_question && <Section title="投票/質問"><PreviewText text={content.poll_question} /></Section>}
-      {!!content.countdown_title && <Section title="カウントダウン"><PreviewText text={`${content.countdown_title} / ${content.countdown_date}`} /></Section>}
+      <Section title="タイプ"><EditableText text={content.story_type} fieldKey="story_type" onUpdate={onUpdate} /></Section>
+      <Section title="投票/質問"><EditableText text={content.poll_question} fieldKey="poll_question" onUpdate={onUpdate} /></Section>
+      {!!content.countdown_title && (
+        <>
+          <Section title="カウントダウンタイトル"><EditableText text={content.countdown_title} fieldKey="countdown_title" onUpdate={onUpdate} /></Section>
+          <Section title="カウントダウン日付"><EditableText text={content.countdown_date} fieldKey="countdown_date" onUpdate={onUpdate} /></Section>
+        </>
+      )}
       {slides && (
         <div className="grid grid-cols-5 gap-2 mt-3">
           {slides.map((s, i) => (
             <div key={i} className="bg-gray-100 rounded-lg p-3 text-center">
               <span className="text-xs font-bold text-gray-500">#{i + 1}</span>
-              <p className="text-xs mt-1">{s.text || "-"}</p>
-              {s.image_note && <p className="text-xs text-gray-400 mt-1">{s.image_note}</p>}
+              <EditableText text={s.text} fieldKey={`slides.${i}.text`} onUpdate={onUpdate} className="text-xs mt-1" />
+              <EditableText text={s.image_note} fieldKey={`slides.${i}.image_note`} onUpdate={onUpdate} className="text-xs text-gray-400 mt-1" />
             </div>
           ))}
         </div>
@@ -757,7 +776,7 @@ function FeedPreview({ content, onUpdate }: { content: Record<string, unknown>; 
         ))}
       </div>
       <Section title="キャプション"><EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} /></Section>
-      <div className="bg-yellow-50 rounded p-3 text-xs text-yellow-700"><PreviewText text={content.disclaimer} /></div>
+      <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
     </div>
   );
 }
@@ -769,38 +788,35 @@ function LPPreview({ content, onUpdate }: { content: Record<string, unknown>; on
       <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-5 text-center">
         <h3 className="text-lg font-bold"><EditableText text={content.title} fieldKey="title" onUpdate={onUpdate} /></h3>
         <EditableText text={content.subtitle} fieldKey="subtitle" onUpdate={onUpdate} />
-        <div className="flex justify-center gap-4 mt-3 text-xs text-gray-500">
-          {!!content.event_date && <span>{String(content.event_date)}</span>}
-          {!!content.event_location && <span>{String(content.event_location)}</span>}
-          {!!content.event_price && <span>{String(content.event_price)}</span>}
+        <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
+          <div><span className="text-gray-400 block">日時</span><EditableText text={content.event_date} fieldKey="event_date" onUpdate={onUpdate} /></div>
+          <div><span className="text-gray-400 block">場所</span><EditableText text={content.event_location} fieldKey="event_location" onUpdate={onUpdate} /></div>
+          <div><span className="text-gray-400 block">料金</span><EditableText text={content.event_price} fieldKey="event_price" onUpdate={onUpdate} /></div>
         </div>
-        {!!content.cta_text && <button className="mt-3 bg-green-600 text-white px-6 py-2 rounded-md text-sm">{String(content.cta_text)}</button>}
+        <Section title="CTAボタン"><EditableText text={content.cta_text} fieldKey="cta_text" onUpdate={onUpdate} /></Section>
       </div>
-      {!!content.benefits && <Section title="ベネフィット">{(content.benefits as string[]).map((b, i) => <p key={i} className="text-sm">✅ {b}</p>)}</Section>}
-      {!!content.agenda && <Section title="アジェンダ"><EditableText text={content.agenda} fieldKey="agenda" onUpdate={onUpdate} /></Section>}
-      {!!content.speaker_name && <Section title="登壇者"><PreviewText text={`${content.speaker_name} / ${content.speaker_title}`} /></Section>}
-      {faqs && <Section title="FAQ">{faqs.map((f, i) => <div key={i} className="mb-2"><p className="text-sm font-medium">Q: {f.q}</p><p className="text-sm text-gray-600">A: {f.a}</p></div>)}</Section>}
-      <Section title="SEO">
-        <p className="text-xs text-gray-400">title: {String(content.meta_title ?? "")}</p>
-        <p className="text-xs text-gray-400">description: {String(content.meta_description ?? "")}</p>
-      </Section>
+      <Section title="ベネフィット"><EditableText text={Array.isArray(content.benefits) ? (content.benefits as string[]).join("\n") : content.benefits} fieldKey="benefits" onUpdate={onUpdate} /></Section>
+      <Section title="アジェンダ"><EditableText text={content.agenda} fieldKey="agenda" onUpdate={onUpdate} /></Section>
+      <Section title="登壇者名"><EditableText text={content.speaker_name} fieldKey="speaker_name" onUpdate={onUpdate} /></Section>
+      <Section title="登壇者肩書き"><EditableText text={content.speaker_title} fieldKey="speaker_title" onUpdate={onUpdate} /></Section>
+      {faqs && <Section title="FAQ">{faqs.map((f, i) => <div key={i} className="mb-2"><div className="text-sm font-medium">Q: <EditableText text={f.q} fieldKey={`faqs.${i}.q`} onUpdate={onUpdate} className="inline" /></div><div className="text-sm text-gray-600">A: <EditableText text={f.a} fieldKey={`faqs.${i}.a`} onUpdate={onUpdate} className="inline" /></div></div>)}</Section>}
+      <Section title="SEO タイトル"><EditableText text={content.meta_title} fieldKey="meta_title" onUpdate={onUpdate} className="text-xs" /></Section>
+      <Section title="SEO ディスクリプション"><EditableText text={content.meta_description} fieldKey="meta_description" onUpdate={onUpdate} className="text-xs" /></Section>
+      <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
     </div>
   );
 }
 
 function NotePreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
-  const titles = [content.title_option1, content.title_option2, content.title_option3].filter(Boolean);
   return (
     <div className="space-y-3">
-      {titles.length > 0 && (
-        <Section title="タイトル案">
-          {titles.map((t, i) => <p key={i} className="text-sm font-medium">{i + 1}. {String(t)}</p>)}
-        </Section>
-      )}
+      <Section title="タイトル案1"><EditableText text={content.title_option1} fieldKey="title_option1" onUpdate={onUpdate} className="font-medium" /></Section>
+      <Section title="タイトル案2"><EditableText text={content.title_option2} fieldKey="title_option2" onUpdate={onUpdate} className="font-medium" /></Section>
+      {!!content.title_option3 && <Section title="タイトル案3"><EditableText text={content.title_option3} fieldKey="title_option3" onUpdate={onUpdate} className="font-medium" /></Section>}
       <Section title="リード"><EditableText text={content.lead} fieldKey="lead" onUpdate={onUpdate} /></Section>
       <Section title="本文">
         <div
-          className="bg-gray-50 rounded p-4 font-mono text-xs whitespace-pre-wrap max-h-80 overflow-auto outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200"
+          className="bg-gray-50 rounded p-4 font-mono text-xs whitespace-pre-wrap max-h-80 overflow-auto outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200 hover:bg-yellow-50/50 cursor-text"
           contentEditable={!!onUpdate}
           suppressContentEditableWarning
           onBlur={(e) => onUpdate?.("body_markdown", e.currentTarget.textContent ?? "")}
@@ -808,46 +824,41 @@ function NotePreview({ content, onUpdate }: { content: Record<string, unknown>; 
           {String(content.body_markdown ?? "")}
         </div>
       </Section>
-      <Section title="タグ">
-        <div className="flex flex-wrap gap-1">
-          {((content.tags as string[]) ?? []).map((t, i) => <span key={i} className="px-2 py-0.5 text-xs bg-gray-100 rounded">{t}</span>)}
-        </div>
-      </Section>
+      <Section title="タグ"><EditableTags tags={(content.tags as string[]) ?? []} fieldKey="tags" onUpdate={onUpdate} /></Section>
       <Section title="OGテキスト"><EditableText text={content.og_text} fieldKey="og_text" onUpdate={onUpdate} /></Section>
-      <Section title="CTA"><PreviewText text={`${content.cta_label} → ${content.cta_url}`} /></Section>
-      <div className="bg-yellow-50 rounded p-3 text-xs text-yellow-700"><PreviewText text={content.disclaimer} /></div>
+      <Section title="CTAラベル"><EditableText text={content.cta_label} fieldKey="cta_label" onUpdate={onUpdate} /></Section>
+      <Section title="CTA URL"><EditableText text={content.cta_url} fieldKey="cta_url" onUpdate={onUpdate} /></Section>
+      <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
     </div>
   );
 }
 
-function LinePreview({ content }: { content: Record<string, unknown> }) {
+function LinePreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const steps = content.step_messages as { timing: string; content: string }[] | undefined;
   return (
     <div className="space-y-3">
-      <Section title="配信タイプ"><span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">{String(content.delivery_type ?? "-")}</span></Section>
-      <Section title="セグメント"><span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">{String(content.segment ?? "all")}</span></Section>
-      {!!content.message_text && (
+      <Section title="配信タイプ"><EditableText text={content.delivery_type} fieldKey="delivery_type" onUpdate={onUpdate} /></Section>
+      <Section title="セグメント"><EditableText text={content.segment} fieldKey="segment" onUpdate={onUpdate} /></Section>
+      <Section title="メッセージ本文">
         <div className="bg-green-50 rounded-lg p-4 max-w-sm">
-          <p className="text-sm whitespace-pre-wrap">{String(content.message_text)}</p>
-          {!!content.cta_label && <p className="text-xs text-green-700 mt-2 font-medium">{String(content.cta_label)}</p>}
+          <EditableText text={content.message_text} fieldKey="message_text" onUpdate={onUpdate} />
         </div>
-      )}
+      </Section>
+      <Section title="CTAラベル"><EditableText text={content.cta_label} fieldKey="cta_label" onUpdate={onUpdate} /></Section>
       {steps && (
-        <div className="space-y-2">
-          {steps.map((s, i) => (
-            <div key={i} className="flex gap-3 items-start">
-              <span className="px-2 py-1 text-xs bg-gray-100 rounded font-medium shrink-0">{s.timing}</span>
-              <p className="text-sm">{s.content || "-"}</p>
-            </div>
-          ))}
-        </div>
+        <Section title="ステップ配信">
+          <div className="space-y-2">
+            {steps.map((s, i) => (
+              <div key={i} className="flex gap-3 items-start">
+                <EditableText text={s.timing} fieldKey={`step_messages.${i}.timing`} onUpdate={onUpdate} className="px-2 py-1 text-xs bg-gray-100 rounded font-medium shrink-0" />
+                <EditableText text={s.content} fieldKey={`step_messages.${i}.content`} onUpdate={onUpdate} />
+              </div>
+            ))}
+          </div>
+        </Section>
       )}
-      {!!content.rich_title && (
-        <div className="bg-green-50 rounded-lg p-4 text-center max-w-sm">
-          <p className="font-bold text-sm">{String(content.rich_title)}</p>
-          <p className="text-xs text-green-700 mt-2">{String(content.rich_cta ?? "")}</p>
-        </div>
-      )}
+      <Section title="リッチメニュータイトル"><EditableText text={content.rich_title} fieldKey="rich_title" onUpdate={onUpdate} /></Section>
+      <Section title="リッチメニューCTA"><EditableText text={content.rich_cta} fieldKey="rich_cta" onUpdate={onUpdate} /></Section>
     </div>
   );
 }
