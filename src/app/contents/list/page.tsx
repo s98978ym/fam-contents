@@ -43,6 +43,15 @@ const CHANNEL_LABEL: Record<string, string> = {
   line: "LINE",
 };
 
+const CHANNEL_COLOR: Record<string, string> = {
+  instagram_reels: "bg-gradient-to-r from-pink-500 to-purple-500",
+  instagram_stories: "bg-gradient-to-r from-orange-400 to-pink-500",
+  instagram_feed: "bg-gradient-to-r from-purple-500 to-indigo-500",
+  event_lp: "bg-emerald-500",
+  note: "bg-slate-700",
+  line: "bg-green-500",
+};
+
 const STATUS_STYLE: Record<string, { bg: string; label: string }> = {
   draft: { bg: "bg-gray-100 text-gray-600", label: "下書き" },
   review: { bg: "bg-yellow-100 text-yellow-700", label: "レビュー待ち" },
@@ -539,7 +548,7 @@ export default function ContentsListPage() {
                 <div className="flex items-center justify-between gap-4">
                   <Link href={`/contents/list/${v.id}`} className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className="px-2 py-0.5 text-xs rounded-full font-medium bg-blue-50 text-blue-700">
+                      <span className={`${CHANNEL_COLOR[v.channel] ?? "bg-slate-500"} text-white px-2 py-0.5 text-[10px] font-semibold rounded`}>
                         {CHANNEL_LABEL[v.channel] ?? v.channel}
                       </span>
                       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${st.bg}`}>
