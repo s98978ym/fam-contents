@@ -543,7 +543,7 @@ export default function VariantDetailPage() {
               <div className="p-4 space-y-3">
                 <input
                   value={reviewForm.reviewer}
-                  onChange={(e) => setReviewForm({ ...reviewForm, reviewer: e.target.value })}
+                  onChange={(e) => { const v = e.target.value; setReviewForm((f) => ({ ...f, reviewer: v })); }}
                   placeholder="あなたの名前"
                   className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full"
                 />
@@ -552,7 +552,7 @@ export default function VariantDetailPage() {
                     <button
                       key={val}
                       type="button"
-                      onClick={() => setReviewForm({ ...reviewForm, role: val })}
+                      onClick={() => setReviewForm((f) => ({ ...f, role: val }))}
                       className={`flex-1 py-1.5 rounded text-[10px] font-medium border ${
                         reviewForm.role === val ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300"
                       }`}
@@ -570,7 +570,7 @@ export default function VariantDetailPage() {
                     <button
                       key={opt.val}
                       type="button"
-                      onClick={() => setReviewForm({ ...reviewForm, decision: opt.val })}
+                      onClick={() => setReviewForm((f) => ({ ...f, decision: opt.val }))}
                       className={`flex-1 py-2 rounded-md text-xs font-medium border transition-colors ${
                         reviewForm.decision === opt.val ? opt.active : opt.cls
                       }`}
@@ -581,7 +581,7 @@ export default function VariantDetailPage() {
                 </div>
                 <textarea
                   value={reviewForm.comment}
-                  onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+                  onChange={(e) => { const v = e.target.value; setReviewForm((f) => ({ ...f, comment: v })); }}
                   placeholder="総合コメント"
                   rows={3}
                   className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full"
