@@ -51,10 +51,10 @@ interface CategorizedFiles {
 // ---------------------------------------------------------------------------
 
 const STEPS = [
-  { id: 1, label: "素材を確認" },
-  { id: 2, label: "チャネルを選ぶ" },
-  { id: 3, label: "プレビュー" },
-  { id: 4, label: "保存" },
+  { id: 1, label: "ファイル確認" },
+  { id: 2, label: "要件設定" },
+  { id: 3, label: "生成中" },
+  { id: 4, label: "プレビュー" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -132,18 +132,11 @@ function generateMockContent(channel: string): Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 const CATEGORY_CONFIG = [
-  { key: "minutes" as const, label: "議事録", color: "blue" },
-  { key: "transcripts" as const, label: "トランスクリプト", color: "purple" },
-  { key: "photos" as const, label: "写真", color: "green" },
-  { key: "others" as const, label: "その他", color: "gray" },
+  { key: "minutes" as const, label: "議事録", icon: "\u{1F4C4}" },
+  { key: "transcripts" as const, label: "トランスクリプト", icon: "\u{1F3A4}" },
+  { key: "photos" as const, label: "写真", icon: "\u{1F5BC}" },
+  { key: "others" as const, label: "その他", icon: "\u{1F4C1}" },
 ];
-
-const COLOR: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  blue: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-700" },
-  purple: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-700" },
-  green: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", badge: "bg-green-100 text-green-700" },
-  gray: { bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600", badge: "bg-gray-100 text-gray-600" },
-};
 
 // ---------------------------------------------------------------------------
 // Page
@@ -309,18 +302,71 @@ export default function FolderDetailPage() {
           {/* ----------------------------------------------------------- */}
           {step === 1 && (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-gray-800">フォルダ内の素材</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">AIが以下のファイルを参考にしてコンテンツを生成します。</p>
-                </div>
-                <button onClick={() => setShowAddFile(!showAddFile)} className="px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700">
-                  + ファイル追加
-                </button>
-              </div>
+              <h3 className="font-bold text-lg text-gray-800">フォルダ内のファイル</h3>
+              <p className="text-sm text-gray-500 mt-1 mb-4">Google Driveから読み込まれたファイルです。内容を確認して「AIで分析する」を押してください。</p>
 
+              {driveFiles.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  ファイルがありません。
+                  <button onClick={() => setShowAddFile(true)} className="text-blue-600 hover:underline ml-1">ファイルを追加</button>
+                </div>
+              ) : (
+                <>
+                  {/* Compact horizontal category columns */}
+                  <div className="grid grid-cols-4 gap-6 mb-6">
+                    {CATEGORY_CONFIG.map((cat) => {
+                      const items = categorized[cat.key];
+                      if (items.length === 0) return <div key={cat.key} />;
+                      return (
+                        <div key={cat.key}>
+                          <div className="flex items-center gap-1.5 mb-2 text-gray-500">
+                            <span className="text-sm">{cat.icon}</span>
+                            <span className="text-sm font-medium">{cat.label}</span>
+                            <span className="text-sm text-gray-400">（{items.length}件）</span>
+                          </div>
+                          <div className="space-y-0.5">
+                            {items.map((f) => (
+                              <p key={f.id} className="text-sm text-gray-800 truncate" title={f.name}>{f.name}</p>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* AI analyze button */}
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={analyzing}
+                    className={`w-full py-3 rounded-lg text-sm font-medium transition-colors ${
+                      analyzing
+                        ? "bg-gray-200 text-gray-500"
+                        : "bg-amber-200/70 text-amber-900 hover:bg-amber-200"
+                    }`}
+                  >
+                    {analyzing ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                        分析中...
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        <span>✧</span> AIで分析する
+                      </span>
+                    )}
+                  </button>
+
+                  {aiAnalysis && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4 text-sm text-gray-700 whitespace-pre-wrap">
+                      {aiAnalysis}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Add file inline */}
               {showAddFile && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                <div className="border border-gray-200 rounded-lg p-4 mt-4">
                   <div className="flex gap-3 items-end">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-gray-600 mb-1">ファイル名</label>
@@ -336,38 +382,15 @@ export default function FolderDetailPage() {
                       </select>
                     </div>
                     <button onClick={handleAddFile} className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 shrink-0">追加</button>
+                    <button onClick={() => setShowAddFile(false)} className="text-gray-400 hover:text-gray-600 text-sm shrink-0">キャンセル</button>
                   </div>
                 </div>
               )}
 
-              {driveFiles.length === 0 ? (
-                <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-lg text-gray-400 text-sm">
-                  ファイルがありません。「+ ファイル追加」で素材を追加してください。
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {CATEGORY_CONFIG.map((cat) => {
-                    const items = categorized[cat.key];
-                    if (items.length === 0) return null;
-                    const c = COLOR[cat.color];
-                    return (
-                      <div key={cat.key} className={`${c.bg} ${c.border} border rounded-lg p-4`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`text-sm font-bold ${c.text}`}>{cat.label}</span>
-                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${c.badge}`}>{items.length}件</span>
-                        </div>
-                        <div className="space-y-1.5">
-                          {items.map((f) => (
-                            <div key={f.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2 shadow-sm">
-                              <span className="text-sm">{f.name}</span>
-                              <span className="text-xs text-gray-400">{f.mimeType.split("/").pop()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              {!showAddFile && driveFiles.length > 0 && (
+                <button onClick={() => setShowAddFile(true)} className="text-xs text-blue-600 hover:underline mt-3">
+                  + ファイルを追加
+                </button>
               )}
             </div>
           )}
@@ -377,23 +400,12 @@ export default function FolderDetailPage() {
           {/* ----------------------------------------------------------- */}
           {step === 2 && (
             <div className="space-y-6">
-              {/* AI Analysis - single button */}
-              <div>
-                <h3 className="font-bold text-gray-800 mb-1">AI分析</h3>
-                <p className="text-sm text-gray-500 mb-3">ボタンを押すと、素材をAIが分析してコンテンツの方向性を提案します。</p>
-                <button onClick={handleAnalyze} disabled={analyzing} className={`px-5 py-2.5 rounded-md text-sm font-medium ${analyzing ? "bg-gray-200 text-gray-500" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}>
-                  {analyzing ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />分析中...
-                    </span>
-                  ) : "素材を分析する"}
-                </button>
-                {aiAnalysis && (
-                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mt-3 text-sm text-gray-700 whitespace-pre-wrap">
-                    {aiAnalysis}
-                  </div>
-                )}
-              </div>
+              {/* AI analysis summary (read-only, from step 1) */}
+              {aiAnalysis && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 whitespace-pre-wrap">
+                  {aiAnalysis}
+                </div>
+              )}
 
               {/* Channel - large visual buttons */}
               <div>
