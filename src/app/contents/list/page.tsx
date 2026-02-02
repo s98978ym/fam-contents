@@ -14,6 +14,7 @@ interface Variant {
   status: string;
   body?: Record<string, unknown>;
   scheduled_at?: string;
+  assignee?: string;
 }
 
 interface Review {
@@ -102,6 +103,7 @@ export default function ContentsListPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("active");
   const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
   const [trashedItems, setTrashedItems] = useState<TrashedItem[]>([]);
@@ -122,7 +124,10 @@ export default function ContentsListPage() {
       fetch("/api/variants").then((r) => r.json()),
       fetch("/api/reviews").then((r) => r.json()),
     ]).then(([v, r]) => {
-      setVariants(v);
+      // Apply persisted assignee overrides
+      const overrides = JSON.parse(localStorage.getItem("assignee_overrides") ?? "{}") as Record<string, string>;
+      const withAssignees = (v as Variant[]).map((x) => overrides[x.id] !== undefined ? { ...x, assignee: overrides[x.id] || undefined } : x);
+      setVariants(withAssignees);
       setReviews(r);
       setLoading(false);
     });
@@ -201,11 +206,25 @@ export default function ContentsListPage() {
     showToast("完全に削除しました");
   }
 
+  function handleAssigneeChange(e: React.MouseEvent, variantId: string, newAssignee: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    setVariants((prev) => prev.map((v) => v.id === variantId ? { ...v, assignee: newAssignee || undefined } : v));
+    // Persist overrides
+    const overrides = JSON.parse(localStorage.getItem("assignee_overrides") ?? "{}");
+    overrides[variantId] = newAssignee;
+    localStorage.setItem("assignee_overrides", JSON.stringify(overrides));
+    showToast(newAssignee ? `担当: ${newAssignee}` : "担当を解除しました");
+  }
+
   // --- Compute effective status ---
   function getEffectiveStatus(v: Variant): { bg: string; label: string } {
     if (isOverdue(v)) return STATUS_STYLE.overdue;
     return STATUS_STYLE[v.status] ?? STATUS_STYLE.draft;
   }
+
+  // --- Known assignees ---
+  const allAssignees = [...new Set(variants.map((v) => v.assignee).filter(Boolean) as string[])].sort();
 
   // --- Filter logic ---
   const activeVariants = variants.filter((v) => !archivedIds.has(v.id) && !trashedIds.has(v.id));
@@ -214,11 +233,17 @@ export default function ContentsListPage() {
 
   const displayVariants = viewMode === "active" ? activeVariants : viewMode === "archived" ? archivedVariants : trashedVariants;
 
-  const filtered = viewMode === "active"
+  const afterStatusFilter = viewMode === "active"
     ? (filter === "all" ? displayVariants
       : filter === "overdue" ? displayVariants.filter((v) => isOverdue(v))
       : displayVariants.filter((v) => v.status === filter && !isOverdue(v)))
     : displayVariants;
+
+  const filtered = assigneeFilter === "all"
+    ? afterStatusFilter
+    : assigneeFilter === "unassigned"
+      ? afterStatusFilter.filter((v) => !v.assignee)
+      : afterStatusFilter.filter((v) => v.assignee === assigneeFilter);
 
   const overdueCount = activeVariants.filter((v) => isOverdue(v)).length;
 
@@ -312,6 +337,32 @@ export default function ContentsListPage() {
         </div>
       )}
 
+      {/* Assignee filter */}
+      {allAssignees.length > 0 && viewMode !== "trash" && (
+        <div className="flex items-center gap-2 mb-5">
+          <span className="text-xs text-gray-500">担当者:</span>
+          <div className="flex gap-1.5">
+            {[
+              { key: "all", label: "全員" },
+              ...allAssignees.map((a) => ({ key: a, label: a })),
+              { key: "unassigned", label: "未設定" },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setAssigneeFilter(opt.key)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                  assigneeFilter === opt.key
+                    ? "bg-indigo-600 text-white"
+                    : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <p className="text-lg mb-2">
@@ -390,7 +441,22 @@ export default function ContentsListPage() {
                     </div>
                   </Link>
 
-                  {/* Action buttons */}
+                  {/* Assignee + Action buttons */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {viewMode !== "trash" && (
+                      <select
+                        value={v.assignee ?? ""}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => { e.stopPropagation(); handleAssigneeChange(e as unknown as React.MouseEvent, v.id, e.target.value); }}
+                        className={`text-xs rounded-md border px-2 py-1.5 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer ${
+                          v.assignee ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-400"
+                        }`}
+                      >
+                        <option value="">担当者</option>
+                        {allAssignees.map((a) => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {viewMode === "active" && (
                       <>

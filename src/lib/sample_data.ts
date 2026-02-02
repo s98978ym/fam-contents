@@ -145,6 +145,7 @@ export const sampleVariants: ChannelVariant[] = [
       hashtags: ["スポーツ栄養", "試合前食事", "FAMアカデミー"],
     },
     scheduled_at: "2026-03-05T12:00:00Z",
+    assignee: "田中",
   },
   {
     id: "var_002",
@@ -157,6 +158,7 @@ export const sampleVariants: ChannelVariant[] = [
       cta_label: "詳細はこちら",
     },
     scheduled_at: "2026-03-07T10:00:00Z",
+    assignee: "鈴木",
   },
   {
     id: "var_003",
@@ -168,6 +170,7 @@ export const sampleVariants: ChannelVariant[] = [
       caption: "試合前の食事戦略、正しく知っていますか？",
     },
     scheduled_at: "2026-03-10T12:00:00Z",
+    assignee: "田中",
   },
   {
     id: "var_004",
@@ -180,6 +183,7 @@ export const sampleVariants: ChannelVariant[] = [
       cta_label: "マイページで確認",
     },
     scheduled_at: "2026-02-15T09:00:00Z",
+    assignee: "佐藤",
   },
   {
     id: "var_005",
@@ -192,6 +196,7 @@ export const sampleVariants: ChannelVariant[] = [
       tags: ["管理栄養士", "エビデンス", "栄養指導"],
     },
     scheduled_at: "2026-02-20T08:00:00Z",
+    assignee: "田中",
   },
   {
     id: "var_006",
@@ -203,6 +208,7 @@ export const sampleVariants: ChannelVariant[] = [
       cta: "答えはプロフィールのリンクから",
     },
     scheduled_at: "2026-03-01T12:00:00Z",
+    assignee: "鈴木",
   },
   {
     id: "var_007",
@@ -216,6 +222,7 @@ export const sampleVariants: ChannelVariant[] = [
       cta_text: "今すぐ申し込む",
     },
     scheduled_at: "2026-03-25T10:00:00Z",
+    assignee: "佐藤",
   },
   {
     id: "var_008",
@@ -227,6 +234,7 @@ export const sampleVariants: ChannelVariant[] = [
       countdown_title: "セミナーまであと...",
     },
     scheduled_at: "2026-04-03T12:00:00Z",
+    assignee: "田中",
   },
   {
     id: "var_009",
@@ -239,6 +247,7 @@ export const sampleVariants: ChannelVariant[] = [
       cta_label: "申し込みはこちら",
     },
     scheduled_at: "2026-03-28T10:00:00Z",
+    assignee: "鈴木",
   },
 ];
 
