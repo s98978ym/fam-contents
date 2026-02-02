@@ -590,13 +590,16 @@ export default function CampaignsPage() {
                     const st = STATUS_LABEL[camp.status] ?? STATUS_LABEL.planning;
                     const campVariants = getVariantsForCampaign(camp.content_ids);
                     return (
-                      <div key={camp.id}>
+                      <div
+                        key={camp.id}
+                        className={`rounded-md transition-all ${dropTarget === camp.id ? "ring-2 ring-indigo-400 bg-indigo-50/40" : ""}`}
+                        onDragOver={(e) => { if (dndVariant && dndVariant.fromCampId !== camp.id) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(camp.id); } }}
+                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget((prev) => prev === camp.id ? null : prev); }}
+                        onDrop={(e) => { e.preventDefault(); if (dndVariant) { moveVariant(dndVariant.fromCampId, camp.id, dndVariant.contentId); setDndVariant(null); } setDropTarget(null); }}
+                      >
                         <div
-                          className={`flex items-center py-0.5 cursor-pointer group rounded-md transition-colors ${isActive ? "bg-slate-50" : "hover:bg-slate-50/50"} ${dropTarget === camp.id ? "ring-2 ring-indigo-400 bg-indigo-50/50" : ""}`}
+                          className={`flex items-center py-0.5 cursor-pointer group rounded-md transition-colors ${isActive ? "bg-slate-50" : "hover:bg-slate-50/50"}`}
                           onClick={() => { setExpandedCampaign(isActive ? null : camp.id); setExpandedVariant(null); }}
-                          onDragOver={(e) => { if (dndVariant && dndVariant.fromCampId !== camp.id) { e.preventDefault(); setDropTarget(camp.id); } }}
-                          onDragLeave={() => setDropTarget(null)}
-                          onDrop={(e) => { e.preventDefault(); if (dndVariant) { moveVariant(dndVariant.fromCampId, camp.id, dndVariant.contentId); setDndVariant(null); } setDropTarget(null); }}
                         >
                           <div className="w-52 shrink-0 truncate pr-3 pl-6 flex items-center gap-1.5">
                             <span className={`text-xs transition-colors ${isActive ? "text-slate-800 font-medium" : "text-slate-500 group-hover:text-slate-700"}`}>
