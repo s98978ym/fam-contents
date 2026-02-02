@@ -483,7 +483,7 @@ export default function CampaignsPage() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Period selector */}
         <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50 border-b border-slate-100">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Timeline</span>
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">タイムライン</span>
           <div className="flex gap-0.5 bg-slate-200/60 rounded-lg p-0.5">
             {WEEK_OPTIONS.map((opt) => (
               <button
