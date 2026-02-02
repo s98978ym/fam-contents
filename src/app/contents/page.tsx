@@ -7,6 +7,7 @@ import {
   TASTE_OPTIONS,
   StepFiles,
   StepRequirements,
+  StepGenerating,
   StepPreview,
   StepSavePublish,
 } from "@/components/content_wizard";
@@ -81,7 +82,7 @@ function generateMockContent(channel: string, settings: GenerationSettings, anal
       practice: "試合3日前からごはんの量を1.5倍に。パスタやうどんもOK。脂質は控えめに。",
       cta: "もっと詳しく知りたい方はプロフィールのリンクから！",
       thumbnail_text: "試合前72時間で差がつく",
-      caption: "試合前の食事、なんとなく決めてませんか？🍙\n\n実は、試合直前だけでなく72時間前からの栄養戦略がパフォーマンスに影響する可能性があります。\n\n今回は科学的な根拠に基づいた「カーボローディング」について解説します。\n\n詳しくはプロフィールのリンクから👆",
+      caption: "試合前の食事、なんとなく決めてませんか？\n\n実は、試合直前だけでなく72時間前からの栄養戦略がパフォーマンスに影響する可能性があります。\n\n今回は科学的な根拠に基づいた「カーボローディング」について解説します。\n\n詳しくはプロフィールのリンクから",
       hashtags: ["スポーツ栄養", "カーボローディング", "試合前食事", "アスリートフード", "パフォーマンスアップ", "管理栄養士監修"],
       bgm_note: settings.taste === "motivational" ? "アップテンポ、やる気が出る系" : "落ち着いたBGM、知的な雰囲気",
       disclaimer: "※個人差があります。具体的な食事計画は専門家にご相談ください。",
@@ -91,12 +92,12 @@ function generateMockContent(channel: string, settings: GenerationSettings, anal
     return {
       story_type: "poll",
       poll_question: "試合前に炭水化物、意識してる？",
-      poll_option1: "してる！💪",
-      poll_option2: "してない…😅",
+      poll_option1: "してる！",
+      poll_option2: "してない…",
       slides: [
         { text: "試合前の食事で\nパフォーマンスが変わる？", image_note: "食事写真の背景" },
-        { text: "実は72時間前からの\n栄養戦略がカギ🔑", image_note: "タイムライン図" },
-        { text: "詳しくはReelsで解説中！\nプロフィールから見てね👆", image_note: "Reelsサムネ" },
+        { text: "実は72時間前からの\n栄養戦略がカギ", image_note: "タイムライン図" },
+        { text: "詳しくはReelsで解説中！\nプロフィールから見てね", image_note: "Reelsサムネ" },
       ],
     };
   }
@@ -109,7 +110,7 @@ function generateMockContent(channel: string, settings: GenerationSettings, anal
       slide4_practice: "✅ 3日前から白米を1.5倍に\n✅ パスタ・うどんもOK\n✅ 脂質は控えめに\n✅ 前日は消化の良いものを",
       slide5_cta: "無料体験はプロフィールのリンクから",
       slide5_supervisor: "監修: 管理栄養士 田中",
-      caption: "試合前の食事戦略、正しく知っていますか？\n\nスワイプして学びましょう👉\n\n#スポーツ栄養 #アスリート食事 #カーボローディング",
+      caption: "試合前の食事戦略、正しく知っていますか？\n\nスワイプして学びましょう\n\n#スポーツ栄養 #アスリート食事 #カーボローディング",
       hashtags: ["スポーツ栄養", "アスリート", "試合前食事", "カーボローディング", "管理栄養士監修"],
       disclaimer: "※個人差があります。具体的な食事計画は専門家にご相談ください。",
     };
@@ -163,11 +164,11 @@ function generateMockContent(channel: string, settings: GenerationSettings, anal
       cta_label: "詳細・お申し込みはこちら",
       cta_url: "https://fam.example.com/academy/trial",
       step_messages: [
-        { timing: "7日前", content: "🎓 スポーツ栄養アカデミー無料体験まであと1週間！早期申込で特典あり" },
-        { timing: "3日前", content: "登壇者は管理栄養士の田中先生。Jリーグでの栄養サポート実績10年のベテランです💪" },
-        { timing: "前日", content: "明日14:00からスタート！Zoomの接続テストをお忘れなく📱" },
-        { timing: "当日", content: "本日14:00〜！参加URLはこちら👇" },
-        { timing: "翌日", content: "ご参加ありがとうございました！アンケートにご協力ください📝 次回は4月開催予定です" },
+        { timing: "7日前", content: "スポーツ栄養アカデミー無料体験まであと1週間！早期申込で特典あり" },
+        { timing: "3日前", content: "登壇者は管理栄養士の田中先生。Jリーグでの栄養サポート実績10年のベテランです" },
+        { timing: "前日", content: "明日14:00からスタート！Zoomの接続テストをお忘れなく" },
+        { timing: "当日", content: "本日14:00〜！参加URLはこちら" },
+        { timing: "翌日", content: "ご参加ありがとうございました！アンケートにご協力ください 次回は4月開催予定です" },
       ],
     };
   }
@@ -227,6 +228,7 @@ export default function ContentsPage() {
 
   const handleGenerate = useCallback(() => {
     setGenerating(true);
+    setStep(3); // Show generating animation
     setTimeout(() => {
       const content = generateMockContent(settings.channel, settings, aiAnalysis);
       setPreview({
@@ -238,9 +240,30 @@ export default function ContentsPage() {
         aiAnalysis,
       });
       setGenerating(false);
-      setStep(3);
-    }, 2000);
+    }, 2500);
   }, [settings, files, aiAnalysis]);
+
+  const handleUpdateContent = useCallback((key: string, value: string) => {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        generatedContent: { ...prev.generatedContent, [key]: value },
+      };
+    });
+  }, []);
+
+  const handleTogglePhotoSelect = useCallback((fileId: string) => {
+    setFiles((prev) => prev.map((f) =>
+      f.id === fileId ? { ...f, selected: !f.selected } : f
+    ));
+  }, []);
+
+  const handleSetEyecatch = useCallback((fileId: string) => {
+    setFiles((prev) => prev.map((f) =>
+      f.id === fileId ? { ...f, isEyecatch: true } : { ...f, isEyecatch: false }
+    ));
+  }, []);
 
   const handleSave = useCallback(async () => {
     if (!preview) return;
@@ -264,7 +287,6 @@ export default function ContentsPage() {
   }, [preview]);
 
   const handlePublish = useCallback(async () => {
-    // Move to review status
     setWizardOpen(false);
     resetWizard();
   }, []);
@@ -277,6 +299,7 @@ export default function ContentsPage() {
     setAiAnalysis("");
     setPreview(null);
     setSaved(false);
+    setGenerating(false);
   }
 
   // Step validation
@@ -316,7 +339,8 @@ export default function ContentsPage() {
             {STEPS.map((s) => (
               <button
                 key={s.id}
-                onClick={() => { if (s.id <= step || canProceed(s.id - 1)) setStep(s.id); }}
+                onClick={() => { if (!generating && (s.id <= step || canProceed(s.id - 1))) setStep(s.id); }}
+                disabled={generating}
                 className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium border-b-2 transition-colors ${
                   step === s.id
                     ? "border-blue-600 text-blue-600 bg-blue-50"
@@ -348,9 +372,12 @@ export default function ContentsPage() {
                 setAiAnalysis={setAiAnalysis}
                 onAnalyze={handleAnalyze}
                 analyzing={analyzing}
+                onTogglePhotoSelect={handleTogglePhotoSelect}
+                onSetEyecatch={handleSetEyecatch}
               />
             )}
-            {step === 3 && <StepPreview preview={preview} onRegenerate={handleGenerate} generating={generating} />}
+            {step === 3 && generating && <StepGenerating channel={settings.channel} />}
+            {step === 3 && !generating && <StepPreview preview={preview} onRegenerate={handleGenerate} generating={generating} onUpdateContent={handleUpdateContent} />}
             {step === 4 && <StepSavePublish preview={preview} onSave={handleSave} onPublish={handlePublish} saving={saving} saved={saved} />}
           </div>
 
@@ -358,31 +385,33 @@ export default function ContentsPage() {
           <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
             <button
               onClick={() => setStep(Math.max(1, step - 1))}
-              disabled={step === 1}
-              className={`px-4 py-2 rounded-md text-sm ${step === 1 ? "text-gray-300" : "text-gray-700 hover:bg-gray-200"}`}
+              disabled={step === 1 || generating}
+              className={`px-4 py-2 rounded-md text-sm ${step === 1 || generating ? "text-gray-300" : "text-gray-700 hover:bg-gray-200"}`}
             >
               ← 戻る
             </button>
             <span className="text-xs text-gray-400">Step {step} / {STEPS.length}</span>
             {step < 3 && (
-              <button
-                onClick={() => setStep(step + 1)}
-                disabled={!canProceed(step)}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${!canProceed(step) ? "bg-gray-200 text-gray-400" : "bg-blue-600 text-white hover:bg-blue-700"}`}
-              >
-                次へ →
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setStep(step + 1)}
+                  disabled={!canProceed(step)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${!canProceed(step) ? "bg-gray-200 text-gray-400" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                >
+                  次へ →
+                </button>
+                {step === 2 && (
+                  <button
+                    onClick={handleGenerate}
+                    disabled={generating || !canProceed(2)}
+                    className={`px-6 py-2 rounded-md text-sm font-medium ${generating || !canProceed(2) ? "bg-gray-200 text-gray-400" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}
+                  >
+                    {generating ? "生成中..." : "生成してプレビュー →"}
+                  </button>
+                )}
+              </div>
             )}
-            {step === 2 && (
-              <button
-                onClick={handleGenerate}
-                disabled={generating || !canProceed(2)}
-                className={`px-6 py-2 rounded-md text-sm font-medium ${generating || !canProceed(2) ? "bg-gray-200 text-gray-400" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}
-              >
-                {generating ? "生成中..." : "生成してプレビュー →"}
-              </button>
-            )}
-            {step === 3 && (
+            {step === 3 && !generating && (
               <button
                 onClick={() => setStep(4)}
                 disabled={!preview}
@@ -391,6 +420,8 @@ export default function ContentsPage() {
                 保存・配信へ →
               </button>
             )}
+            {step === 3 && generating && <div />}
+            {step === 4 && <div />}
           </div>
         </div>
       )}

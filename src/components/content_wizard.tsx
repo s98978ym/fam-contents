@@ -12,6 +12,8 @@ export interface FileEntry {
   type: "photo" | "minutes" | "script" | "plan" | "other";
   driveUrl: string;
   addedAt: string;
+  selected?: boolean;
+  isEyecatch?: boolean;
 }
 
 export interface DriveFolder {
@@ -35,6 +37,14 @@ export interface PreviewData {
   files: FileEntry[];
   settings: GenerationSettings;
   aiAnalysis: string;
+}
+
+export interface CategorizedFiles {
+  minutes: FileEntry[];
+  scripts: FileEntry[];
+  photos: FileEntry[];
+  plans: FileEntry[];
+  others: FileEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +132,26 @@ export const IMAGE_OPTIONS = [
 ];
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+export function categorizeFiles(files: FileEntry[]): CategorizedFiles {
+  return {
+    minutes: files.filter((f) => f.type === "minutes"),
+    scripts: files.filter((f) => f.type === "script"),
+    photos: files.filter((f) => f.type === "photo"),
+    plans: files.filter((f) => f.type === "plan"),
+    others: files.filter((f) => f.type === "other"),
+  };
+}
+
+function getPromptType(channel: string): string {
+  if (channel.startsWith("instagram")) return "instagram";
+  if (channel === "event_lp") return "lp";
+  return channel;
+}
+
+// ---------------------------------------------------------------------------
 // Shared UI
 // ---------------------------------------------------------------------------
 
@@ -143,7 +173,7 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 }
 
 // ---------------------------------------------------------------------------
-// Step 1: File Registration
+// Step 1: File Registration (blog-cms style with categorized view)
 // ---------------------------------------------------------------------------
 
 export function StepFiles({
@@ -157,11 +187,12 @@ export function StepFiles({
   files: FileEntry[];
   setFiles: (f: FileEntry[]) => void;
 }) {
-  const [newFile, setNewFile] = useState<Omit<FileEntry, "id" | "addedAt">>({ name: "", type: "photo", driveUrl: "" });
+  const [newFile, setNewFile] = useState<Omit<FileEntry, "id" | "addedAt" | "selected" | "isEyecatch">>({ name: "", type: "photo", driveUrl: "" });
+  const [dragOver, setDragOver] = useState(false);
 
   function addFile() {
     if (!newFile.name || !newFile.driveUrl) return;
-    setFiles([...files, { ...newFile, id: `file_${Date.now()}`, addedAt: new Date().toISOString() }]);
+    setFiles([...files, { ...newFile, id: `file_${Date.now()}`, addedAt: new Date().toISOString(), selected: true, isEyecatch: false }]);
     setNewFile({ name: "", type: "photo", driveUrl: "" });
   }
 
@@ -169,20 +200,22 @@ export function StepFiles({
     setFiles(files.filter((f) => f.id !== id));
   }
 
-  const typeLabel: Record<string, string> = {
-    photo: "写真",
-    minutes: "議事録/スクリプト",
-    script: "台本/原稿",
-    plan: "企画書",
-    other: "その他",
-  };
+  const categorized = categorizeFiles(files);
 
-  const typeColor: Record<string, string> = {
-    photo: "bg-green-100 text-green-700",
-    minutes: "bg-blue-100 text-blue-700",
-    script: "bg-purple-100 text-purple-700",
-    plan: "bg-yellow-100 text-yellow-700",
-    other: "bg-gray-100 text-gray-600",
+  const categoryConfig = [
+    { key: "minutes", label: "議事録 / トランスクリプト", icon: "📝", color: "blue", items: categorized.minutes },
+    { key: "scripts", label: "台本 / 原稿", icon: "📄", color: "purple", items: categorized.scripts },
+    { key: "photos", label: "写真素材", icon: "📷", color: "green", items: categorized.photos },
+    { key: "plans", label: "企画書", icon: "📋", color: "yellow", items: categorized.plans },
+    { key: "others", label: "その他", icon: "📎", color: "gray", items: categorized.others },
+  ];
+
+  const colorMap: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+    blue: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-700" },
+    purple: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-700" },
+    green: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", badge: "bg-green-100 text-green-700" },
+    yellow: { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700", badge: "bg-yellow-100 text-yellow-700" },
+    gray: { bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600", badge: "bg-gray-100 text-gray-600" },
   };
 
   return (
@@ -190,7 +223,7 @@ export function StepFiles({
       {/* Drive Folder */}
       <div>
         <h4 className="text-sm font-bold text-gray-800 border-b pb-1 mb-3">Google Drive フォルダ登録</h4>
-        <p className="text-xs text-gray-500 mb-3">コンテンツ素材を管理するDriveフォルダを指定してください。</p>
+        <p className="text-xs text-gray-500 mb-3">コンテンツ素材を管理するDriveフォルダを指定してください。フォルダ内のファイルが自動的に分類されます。</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>フォルダ名</Label>
@@ -203,11 +236,23 @@ export function StepFiles({
         </div>
       </div>
 
-      {/* File Registration */}
+      {/* File Registration with drag-and-drop area */}
       <div>
         <h4 className="text-sm font-bold text-gray-800 border-b pb-1 mb-3">ファイル登録</h4>
-        <p className="text-xs text-gray-500 mb-3">写真、議事録/スクリプト、企画書などのファイルを登録してください。AI分析の入力ソースになります。</p>
 
+        {/* Drag & drop area */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); }}
+          className={`border-2 border-dashed rounded-lg p-6 text-center mb-4 transition-colors ${dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-gray-50"}`}
+        >
+          <div className="text-3xl mb-2">📁</div>
+          <p className="text-sm text-gray-600 font-medium">ファイルをドラッグ＆ドロップ</p>
+          <p className="text-xs text-gray-400 mt-1">または下のフォームから手動で追加</p>
+        </div>
+
+        {/* Manual add form */}
         <div className="bg-gray-50 rounded-md p-4 mb-4">
           <div className="grid grid-cols-12 gap-3 items-end">
             <div className="col-span-3">
@@ -234,23 +279,37 @@ export function StepFiles({
           </div>
         </div>
 
-        {/* File list */}
+        {/* Categorized file list (blog-cms style) */}
         {files.length === 0 ? (
           <div className="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-lg">
             ファイルが登録されていません。上のフォームからファイルを追加してください。
           </div>
         ) : (
-          <div className="space-y-2">
-            {files.map((f) => (
-              <div key={f.id} className="flex items-center justify-between bg-white border border-gray-200 rounded-md px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${typeColor[f.type]}`}>{typeLabel[f.type]}</span>
-                  <span className="text-sm font-medium">{f.name}</span>
-                  <span className="text-xs text-gray-400 truncate max-w-xs">{f.driveUrl}</span>
+          <div className="space-y-4">
+            {categoryConfig.map((cat) => {
+              if (cat.items.length === 0) return null;
+              const colors = colorMap[cat.color];
+              return (
+                <div key={cat.key} className={`${colors.bg} ${colors.border} border rounded-lg p-4`}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">{cat.icon}</span>
+                    <span className={`text-sm font-bold ${colors.text}`}>{cat.label}</span>
+                    <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${colors.badge}`}>{cat.items.length}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {cat.items.map((f) => (
+                      <div key={f.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium">{f.name}</span>
+                          <span className="text-xs text-gray-400 truncate max-w-xs">{f.driveUrl}</span>
+                        </div>
+                        <button type="button" onClick={() => removeFile(f.id)} className="text-xs text-red-500 hover:text-red-700">削除</button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <button type="button" onClick={() => removeFile(f.id)} className="text-xs text-red-500 hover:text-red-700">削除</button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -259,7 +318,7 @@ export function StepFiles({
 }
 
 // ---------------------------------------------------------------------------
-// Step 2: Requirements
+// Step 2: Requirements (blog-cms style with photo grid + eyecatch)
 // ---------------------------------------------------------------------------
 
 export function StepRequirements({
@@ -271,6 +330,8 @@ export function StepRequirements({
   setAiAnalysis,
   onAnalyze,
   analyzing,
+  onTogglePhotoSelect,
+  onSetEyecatch,
 }: {
   files: FileEntry[];
   settings: GenerationSettings;
@@ -280,11 +341,14 @@ export function StepRequirements({
   setAiAnalysis: (a: string) => void;
   onAnalyze: () => void;
   analyzing: boolean;
+  onTogglePhotoSelect?: (fileId: string) => void;
+  onSetEyecatch?: (fileId: string) => void;
 }) {
   const wordCountOpts = WORD_COUNT_OPTIONS[settings.channel] ?? WORD_COUNT_OPTIONS["note"];
   const relevantPrompts = promptVersions.filter(
     (p) => p.type === getPromptType(settings.channel) || p.type === "planner"
   );
+  const photos = files.filter((f) => f.type === "photo");
 
   return (
     <div className="space-y-6">
@@ -293,18 +357,32 @@ export function StepRequirements({
         <h4 className="text-sm font-bold text-gray-800 border-b pb-1 mb-3">AI分析結果</h4>
         <p className="text-xs text-gray-500 mb-3">登録したファイル（{files.length}件）をAIが分析し、コンテンツの方向性を提案します。</p>
         <div className="flex gap-3 mb-3">
-          <button type="button" onClick={onAnalyze} disabled={analyzing || files.length === 0} className={`px-4 py-2 rounded-md text-sm font-medium ${analyzing ? "bg-gray-300 text-gray-500" : files.length === 0 ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}>
-            {analyzing ? "分析中..." : "ファイルを分析する"}
+          <button type="button" onClick={onAnalyze} disabled={analyzing || files.length === 0} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${analyzing ? "bg-gray-300 text-gray-500" : files.length === 0 ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}>
+            {analyzing ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                分析中...
+              </span>
+            ) : "ファイルを分析する"}
           </button>
           {files.length === 0 && <span className="text-xs text-orange-500 self-center">先にStep 1でファイルを登録してください</span>}
         </div>
-        <Textarea
-          value={aiAnalysis}
-          onChange={(e) => setAiAnalysis(e.target.value)}
-          rows={4}
-          placeholder="ファイルを分析すると、AI分析結果がここに表示されます。手動で編集も可能です。"
-          className="bg-indigo-50 border-indigo-200"
-        />
+        {aiAnalysis && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+            <Textarea
+              value={aiAnalysis}
+              onChange={(e) => setAiAnalysis(e.target.value)}
+              rows={6}
+              className="bg-white border-indigo-200"
+            />
+            <p className="text-xs text-indigo-400 mt-2">分析結果を手動で編集できます。</p>
+          </div>
+        )}
+        {!aiAnalysis && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-gray-400 text-sm">
+            「ファイルを分析する」ボタンを押すと、AI分析結果がここに表示されます。
+          </div>
+        )}
       </div>
 
       {/* Channel selection */}
@@ -343,11 +421,11 @@ export function StepRequirements({
               ))}
             </select>
             <p className="text-xs text-gray-400 mb-4">
-              カスタムプロンプトは「プロンプト管理」ページで追加・編集できます。
+              カスタムプロンプトは <a href="/prompt-versions" className="text-blue-500 underline">プロンプト管理</a> ページで追加・編集できます。
             </p>
           </div>
 
-          {/* Taste */}
+          {/* Taste - button grid (blog-cms style) */}
           <div>
             <Label>テイスト（トーン＆マナー）</Label>
             <div className="grid grid-cols-5 gap-2 mb-4">
@@ -356,7 +434,7 @@ export function StepRequirements({
                   key={t.value}
                   type="button"
                   onClick={() => setSettings({ ...settings, taste: t.value })}
-                  className={`px-3 py-2.5 rounded-md text-sm border transition-colors ${settings.taste === t.value ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300 hover:bg-gray-50"}`}
+                  className={`px-3 py-2.5 rounded-md text-sm border transition-all ${settings.taste === t.value ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white border-gray-300 hover:bg-gray-50"}`}
                 >
                   {t.label}
                 </button>
@@ -364,7 +442,7 @@ export function StepRequirements({
             </div>
           </div>
 
-          {/* Word count */}
+          {/* Word count - button grid */}
           <div>
             <Label>文字数 / ボリューム</Label>
             <div className="grid grid-cols-3 gap-2 mb-4">
@@ -373,7 +451,7 @@ export function StepRequirements({
                   key={w.value}
                   type="button"
                   onClick={() => setSettings({ ...settings, wordCount: w.value })}
-                  className={`px-3 py-2.5 rounded-md text-sm border transition-colors ${settings.wordCount === w.value ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300 hover:bg-gray-50"}`}
+                  className={`px-3 py-2.5 rounded-md text-sm border transition-all ${settings.wordCount === w.value ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white border-gray-300 hover:bg-gray-50"}`}
                 >
                   {w.label}
                 </button>
@@ -381,7 +459,44 @@ export function StepRequirements({
             </div>
           </div>
 
-          {/* Image */}
+          {/* Photo selection grid (blog-cms style) */}
+          {photos.length > 0 && (
+            <div>
+              <Label hint="使用する写真を選択し、アイキャッチにしたい写真には★をクリック">写真選択</Label>
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                {photos.map((photo) => (
+                  <div
+                    key={photo.id}
+                    className={`relative border-2 rounded-lg p-3 cursor-pointer transition-all ${photo.selected ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                    onClick={() => onTogglePhotoSelect?.(photo.id)}
+                  >
+                    {/* Photo placeholder */}
+                    <div className="aspect-square bg-gray-100 rounded-md flex items-center justify-center mb-2">
+                      <span className="text-2xl">📷</span>
+                    </div>
+                    <p className="text-xs truncate font-medium">{photo.name}</p>
+                    {/* Eyecatch star */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onSetEyecatch?.(photo.id); }}
+                      className={`absolute top-2 right-2 text-lg transition-all ${photo.isEyecatch ? "text-yellow-400 drop-shadow-md" : "text-gray-300 hover:text-yellow-300"}`}
+                      title={photo.isEyecatch ? "アイキャッチ設定済み" : "アイキャッチに設定"}
+                    >
+                      ★
+                    </button>
+                    {/* Selected check */}
+                    {photo.selected && (
+                      <div className="absolute top-2 left-2 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Image handling */}
           <div>
             <Label>画像（解像度処理）/ 生成画像</Label>
             <div className="grid grid-cols-4 gap-2 mb-4">
@@ -390,7 +505,7 @@ export function StepRequirements({
                   key={img.value}
                   type="button"
                   onClick={() => setSettings({ ...settings, imageHandling: img.value })}
-                  className={`px-3 py-2.5 rounded-md text-sm border transition-colors ${settings.imageHandling === img.value ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300 hover:bg-gray-50"}`}
+                  className={`px-3 py-2.5 rounded-md text-sm border transition-all ${settings.imageHandling === img.value ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white border-gray-300 hover:bg-gray-50"}`}
                 >
                   {img.label}
                 </button>
@@ -415,17 +530,49 @@ export function StepRequirements({
 }
 
 // ---------------------------------------------------------------------------
-// Step 3: Preview
+// Generating Step (blog-cms style loading animation)
+// ---------------------------------------------------------------------------
+
+export function StepGenerating({ channel }: { channel: string }) {
+  const label = CHANNEL_LABELS[channel] ?? channel;
+  return (
+    <div className="flex flex-col items-center justify-center py-16">
+      <div className="relative mb-8">
+        <div className="w-20 h-20 border-4 border-blue-200 rounded-full animate-spin border-t-blue-600" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-2xl">✨</span>
+        </div>
+      </div>
+      <h3 className="text-lg font-bold text-gray-800 mb-2">コンテンツを生成中...</h3>
+      <p className="text-sm text-gray-500 mb-1">{label} 向けのコンテンツを生成しています。</p>
+      <p className="text-xs text-gray-400">AI がファイルを分析し、最適なコンテンツを作成しています。</p>
+      <div className="flex gap-1 mt-6">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
+            style={{ animationDelay: `${i * 0.2}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Preview (blog-cms style with contentEditable)
 // ---------------------------------------------------------------------------
 
 export function StepPreview({
   preview,
   onRegenerate,
   generating,
+  onUpdateContent,
 }: {
   preview: PreviewData | null;
   onRegenerate: () => void;
   generating: boolean;
+  onUpdateContent?: (key: string, value: string) => void;
 }) {
   if (!preview) {
     return (
@@ -442,14 +589,21 @@ export function StepPreview({
         <h4 className="text-sm font-bold text-gray-800">
           プレビュー: <span className="text-blue-600">{preview.channelLabel}</span>
         </h4>
-        <button
-          type="button"
-          onClick={onRegenerate}
-          disabled={generating}
-          className="px-4 py-2 rounded-md text-sm border border-gray-300 hover:bg-gray-50"
-        >
-          {generating ? "再生成中..." : "再生成する"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onRegenerate}
+            disabled={generating}
+            className="px-4 py-2 rounded-md text-sm border border-gray-300 hover:bg-gray-50"
+          >
+            {generating ? "再生成中..." : "再生成する"}
+          </button>
+        </div>
+      </div>
+
+      {/* Inline editing hint */}
+      <div className="bg-amber-50 border border-amber-200 rounded-md px-4 py-2 text-xs text-amber-700">
+        テキスト部分をクリックすると直接編集できます。編集した内容はそのまま保存されます。
       </div>
 
       {/* AI Analysis summary */}
@@ -470,7 +624,7 @@ export function StepPreview({
         </div>
       </div>
 
-      {/* Settings summary */}
+      {/* Settings summary card */}
       <div className="bg-gray-50 rounded-md p-4">
         <span className="text-xs font-bold text-gray-500 uppercase">生成設定</span>
         <div className="grid grid-cols-4 gap-4 mt-2 text-sm">
@@ -481,34 +635,26 @@ export function StepPreview({
         </div>
       </div>
 
-      {/* Generated content - channel-specific rendering */}
+      {/* Generated content with contentEditable */}
       <div className="bg-white border border-gray-200 rounded-lg p-5">
         <span className="text-xs font-bold text-gray-500 uppercase mb-3 block">生成コンテンツ</span>
-        <ChannelPreviewRenderer channel={preview.channel} content={preview.generatedContent} />
+        <ChannelPreviewRenderer channel={preview.channel} content={preview.generatedContent} onUpdate={onUpdateContent} />
       </div>
     </div>
   );
 }
 
-function ChannelPreviewRenderer({ channel, content }: { channel: string; content: Record<string, unknown> }) {
-  if (channel.startsWith("instagram_reels")) {
-    return <ReelsPreview content={content} />;
-  }
-  if (channel.startsWith("instagram_stories")) {
-    return <StoriesPreview content={content} />;
-  }
-  if (channel.startsWith("instagram_feed")) {
-    return <FeedPreview content={content} />;
-  }
-  if (channel === "event_lp") {
-    return <LPPreview content={content} />;
-  }
-  if (channel === "note") {
-    return <NotePreview content={content} />;
-  }
-  if (channel === "line") {
-    return <LinePreview content={content} />;
-  }
+// ---------------------------------------------------------------------------
+// Channel-specific preview renderers with contentEditable
+// ---------------------------------------------------------------------------
+
+function ChannelPreviewRenderer({ channel, content, onUpdate }: { channel: string; content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
+  if (channel.startsWith("instagram_reels")) return <ReelsPreview content={content} onUpdate={onUpdate} />;
+  if (channel.startsWith("instagram_stories")) return <StoriesPreview content={content} />;
+  if (channel.startsWith("instagram_feed")) return <FeedPreview content={content} onUpdate={onUpdate} />;
+  if (channel === "event_lp") return <LPPreview content={content} onUpdate={onUpdate} />;
+  if (channel === "note") return <NotePreview content={content} onUpdate={onUpdate} />;
+  if (channel === "line") return <LinePreview content={content} />;
   return <pre className="text-xs font-mono whitespace-pre-wrap">{JSON.stringify(content, null, 2)}</pre>;
 }
 
@@ -521,12 +667,28 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function EditableText({ text, fieldKey, onUpdate }: { text: unknown; fieldKey?: string; onUpdate?: (key: string, value: string) => void }) {
+  if (!text) return <span className="text-gray-300 text-sm">-</span>;
+  return (
+    <p
+      className="text-sm whitespace-pre-wrap outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200 rounded px-1 -mx-1 transition-colors"
+      contentEditable={!!onUpdate}
+      suppressContentEditableWarning
+      onBlur={(e) => {
+        if (onUpdate && fieldKey) onUpdate(fieldKey, e.currentTarget.textContent ?? "");
+      }}
+    >
+      {String(text)}
+    </p>
+  );
+}
+
 function PreviewText({ text }: { text: unknown }) {
   if (!text) return <span className="text-gray-300 text-sm">-</span>;
   return <p className="text-sm whitespace-pre-wrap">{String(text)}</p>;
 }
 
-function ReelsPreview({ content }: { content: Record<string, unknown> }) {
+function ReelsPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   return (
     <div className="space-y-3">
       <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-4">
@@ -536,15 +698,15 @@ function ReelsPreview({ content }: { content: Record<string, unknown> }) {
           ))}
         </div>
       </div>
-      <Section title="Hook"><PreviewText text={content.hook} /></Section>
-      <Section title="課題"><PreviewText text={content.problem} /></Section>
-      <Section title="エビデンス"><PreviewText text={content.evidence} /></Section>
-      <Section title="引用元"><PreviewText text={content.evidence_source} /></Section>
-      <Section title="実践"><PreviewText text={content.practice} /></Section>
-      <Section title="CTA"><PreviewText text={content.cta} /></Section>
+      <Section title="Hook"><EditableText text={content.hook} fieldKey="hook" onUpdate={onUpdate} /></Section>
+      <Section title="課題"><EditableText text={content.problem} fieldKey="problem" onUpdate={onUpdate} /></Section>
+      <Section title="エビデンス"><EditableText text={content.evidence} fieldKey="evidence" onUpdate={onUpdate} /></Section>
+      <Section title="引用元"><EditableText text={content.evidence_source} fieldKey="evidence_source" onUpdate={onUpdate} /></Section>
+      <Section title="実践"><EditableText text={content.practice} fieldKey="practice" onUpdate={onUpdate} /></Section>
+      <Section title="CTA"><EditableText text={content.cta} fieldKey="cta" onUpdate={onUpdate} /></Section>
       <div className="border-t pt-3">
-        <Section title="サムネイル"><PreviewText text={content.thumbnail_text} /></Section>
-        <Section title="キャプション"><PreviewText text={content.caption} /></Section>
+        <Section title="サムネイル"><EditableText text={content.thumbnail_text} fieldKey="thumbnail_text" onUpdate={onUpdate} /></Section>
+        <Section title="キャプション"><EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} /></Section>
         {Array.isArray(content.hashtags) && <Section title="ハッシュタグ"><div className="flex flex-wrap gap-1">{(content.hashtags as string[]).map((h, i) => <span key={i} className="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded">#{h}</span>)}</div></Section>}
       </div>
       <div className="bg-yellow-50 rounded p-3 text-xs text-yellow-700"><PreviewText text={content.disclaimer} /></div>
@@ -574,13 +736,13 @@ function StoriesPreview({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-function FeedPreview({ content }: { content: Record<string, unknown> }) {
+function FeedPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const slides = [
-    { label: "表紙", text: content.slide1_cover },
-    { label: "誤解", text: content.slide2_misconception },
-    { label: "正しい理解", text: content.slide3_truth },
-    { label: "実践", text: content.slide4_practice },
-    { label: "CTA", text: content.slide5_cta },
+    { label: "表紙", key: "slide1_cover", text: content.slide1_cover },
+    { label: "誤解", key: "slide2_misconception", text: content.slide2_misconception },
+    { label: "正しい理解", key: "slide3_truth", text: content.slide3_truth },
+    { label: "実践", key: "slide4_practice", text: content.slide4_practice },
+    { label: "CTA", key: "slide5_cta", text: content.slide5_cta },
   ];
   return (
     <div>
@@ -588,33 +750,35 @@ function FeedPreview({ content }: { content: Record<string, unknown> }) {
         {slides.map((s, i) => (
           <div key={i} className="bg-gray-50 border rounded-lg p-3">
             <span className="text-xs font-bold text-gray-500">{i + 1}. {s.label}</span>
-            <p className="text-xs mt-2">{String(s.text ?? "-")}</p>
+            <div className="mt-2">
+              <EditableText text={s.text} fieldKey={s.key} onUpdate={onUpdate} />
+            </div>
           </div>
         ))}
       </div>
-      <Section title="キャプション"><PreviewText text={content.caption} /></Section>
+      <Section title="キャプション"><EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} /></Section>
       <div className="bg-yellow-50 rounded p-3 text-xs text-yellow-700"><PreviewText text={content.disclaimer} /></div>
     </div>
   );
 }
 
-function LPPreview({ content }: { content: Record<string, unknown> }) {
+function LPPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const faqs = content.faqs as { q: string; a: string }[] | undefined;
   return (
     <div className="space-y-3">
       <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-5 text-center">
-        <h3 className="text-lg font-bold">{String(content.title ?? "")}</h3>
-        <p className="text-sm text-gray-600 mt-1">{String(content.subtitle ?? "")}</p>
+        <h3 className="text-lg font-bold"><EditableText text={content.title} fieldKey="title" onUpdate={onUpdate} /></h3>
+        <EditableText text={content.subtitle} fieldKey="subtitle" onUpdate={onUpdate} />
         <div className="flex justify-center gap-4 mt-3 text-xs text-gray-500">
           {!!content.event_date && <span>{String(content.event_date)}</span>}
           {!!content.event_location && <span>{String(content.event_location)}</span>}
           {!!content.event_price && <span>{String(content.event_price)}</span>}
         </div>
-        {!!content.cta_text &&<button className="mt-3 bg-green-600 text-white px-6 py-2 rounded-md text-sm">{String(content.cta_text)}</button>}
+        {!!content.cta_text && <button className="mt-3 bg-green-600 text-white px-6 py-2 rounded-md text-sm">{String(content.cta_text)}</button>}
       </div>
-      {!!content.benefits &&<Section title="ベネフィット">{(content.benefits as string[]).map((b, i) => <p key={i} className="text-sm">✅ {b}</p>)}</Section>}
-      {!!content.agenda &&<Section title="アジェンダ"><PreviewText text={content.agenda} /></Section>}
-      {!!content.speaker_name &&<Section title="登壇者"><PreviewText text={`${content.speaker_name} / ${content.speaker_title}`} /></Section>}
+      {!!content.benefits && <Section title="ベネフィット">{(content.benefits as string[]).map((b, i) => <p key={i} className="text-sm">✅ {b}</p>)}</Section>}
+      {!!content.agenda && <Section title="アジェンダ"><EditableText text={content.agenda} fieldKey="agenda" onUpdate={onUpdate} /></Section>}
+      {!!content.speaker_name && <Section title="登壇者"><PreviewText text={`${content.speaker_name} / ${content.speaker_title}`} /></Section>}
       {faqs && <Section title="FAQ">{faqs.map((f, i) => <div key={i} className="mb-2"><p className="text-sm font-medium">Q: {f.q}</p><p className="text-sm text-gray-600">A: {f.a}</p></div>)}</Section>}
       <Section title="SEO">
         <p className="text-xs text-gray-400">title: {String(content.meta_title ?? "")}</p>
@@ -624,7 +788,7 @@ function LPPreview({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-function NotePreview({ content }: { content: Record<string, unknown> }) {
+function NotePreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const titles = [content.title_option1, content.title_option2, content.title_option3].filter(Boolean);
   return (
     <div className="space-y-3">
@@ -633,16 +797,23 @@ function NotePreview({ content }: { content: Record<string, unknown> }) {
           {titles.map((t, i) => <p key={i} className="text-sm font-medium">{i + 1}. {String(t)}</p>)}
         </Section>
       )}
-      <Section title="リード"><PreviewText text={content.lead} /></Section>
+      <Section title="リード"><EditableText text={content.lead} fieldKey="lead" onUpdate={onUpdate} /></Section>
       <Section title="本文">
-        <div className="bg-gray-50 rounded p-4 font-mono text-xs whitespace-pre-wrap max-h-80 overflow-auto">{String(content.body_markdown ?? "")}</div>
+        <div
+          className="bg-gray-50 rounded p-4 font-mono text-xs whitespace-pre-wrap max-h-80 overflow-auto outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200"
+          contentEditable={!!onUpdate}
+          suppressContentEditableWarning
+          onBlur={(e) => onUpdate?.("body_markdown", e.currentTarget.textContent ?? "")}
+        >
+          {String(content.body_markdown ?? "")}
+        </div>
       </Section>
       <Section title="タグ">
         <div className="flex flex-wrap gap-1">
           {((content.tags as string[]) ?? []).map((t, i) => <span key={i} className="px-2 py-0.5 text-xs bg-gray-100 rounded">{t}</span>)}
         </div>
       </Section>
-      <Section title="OGテキスト"><PreviewText text={content.og_text} /></Section>
+      <Section title="OGテキスト"><EditableText text={content.og_text} fieldKey="og_text" onUpdate={onUpdate} /></Section>
       <Section title="CTA"><PreviewText text={`${content.cta_label} → ${content.cta_url}`} /></Section>
       <div className="bg-yellow-50 rounded p-3 text-xs text-yellow-700"><PreviewText text={content.disclaimer} /></div>
     </div>
@@ -658,7 +829,7 @@ function LinePreview({ content }: { content: Record<string, unknown> }) {
       {!!content.message_text && (
         <div className="bg-green-50 rounded-lg p-4 max-w-sm">
           <p className="text-sm whitespace-pre-wrap">{String(content.message_text)}</p>
-          {!!content.cta_label &&<p className="text-xs text-green-700 mt-2 font-medium">{String(content.cta_label)}</p>}
+          {!!content.cta_label && <p className="text-xs text-green-700 mt-2 font-medium">{String(content.cta_label)}</p>}
         </div>
       )}
       {steps && (
@@ -738,15 +909,15 @@ export function StepSavePublish({
           type="button"
           onClick={onSave}
           disabled={saving || saved}
-          className={`px-6 py-3 rounded-md text-sm font-medium ${saved ? "bg-green-100 text-green-700" : "bg-gray-800 text-white hover:bg-gray-900"}`}
+          className={`px-6 py-3 rounded-md text-sm font-medium transition-all ${saved ? "bg-green-100 text-green-700" : "bg-gray-800 text-white hover:bg-gray-900"}`}
         >
-          {saved ? "保存済み" : saving ? "保存中..." : "下書き保存"}
+          {saved ? "保存済み ✓" : saving ? "保存中..." : "下書き保存"}
         </button>
         <button
           type="button"
           onClick={onPublish}
           disabled={saving || !saved}
-          className={`px-6 py-3 rounded-md text-sm font-medium ${!saved ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+          className={`px-6 py-3 rounded-md text-sm font-medium transition-all ${!saved ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
         >
           {scheduledAt ? "配信予約する" : "レビュー依頼へ送る"}
         </button>
@@ -757,14 +928,4 @@ export function StepSavePublish({
       )}
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getPromptType(channel: string): string {
-  if (channel.startsWith("instagram")) return "instagram";
-  if (channel === "event_lp") return "lp";
-  return channel;
 }
