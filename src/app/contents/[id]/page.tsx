@@ -210,7 +210,24 @@ export default function FolderDetailPage() {
   }, [settings, wizardFiles, aiAnalysis]);
 
   const handleUpdateContent = useCallback((key: string, value: string) => {
-    setPreview((prev) => prev ? { ...prev, generatedContent: { ...prev.generatedContent, [key]: value } } : prev);
+    setPreview((prev) => {
+      if (!prev) return prev;
+      const content = { ...prev.generatedContent };
+      // Support nested keys like "slides.0.text" or "faqs.1.q"
+      const parts = key.split(".");
+      if (parts.length === 3) {
+        const [arrKey, idxStr, field] = parts;
+        const arr = Array.isArray(content[arrKey]) ? [...(content[arrKey] as Record<string, unknown>[])] : [];
+        const idx = parseInt(idxStr);
+        if (arr[idx]) {
+          arr[idx] = { ...arr[idx], [field]: value };
+          content[arrKey] = arr;
+        }
+      } else {
+        content[key] = value;
+      }
+      return { ...prev, generatedContent: content };
+    });
   }, []);
 
   const handleSave = useCallback(async () => {
