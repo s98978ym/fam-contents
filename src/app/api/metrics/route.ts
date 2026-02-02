@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { sampleMetrics } from "@/lib/sample_data";
+import { metricStore } from "@/lib/store";
 
 export async function GET() {
-  return NextResponse.json(sampleMetrics);
+  return NextResponse.json(metricStore.list());
 }
