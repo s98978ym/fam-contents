@@ -27,6 +27,8 @@ export async function POST(request: Request) {
     contentStore.update(body.content_id, { status: "approved" });
   } else if (body.decision === "revision_requested") {
     contentStore.update(body.content_id, { status: "draft" });
+  } else if (body.decision === "rejected") {
+    contentStore.update(body.content_id, { status: "draft" });
   }
 
   return NextResponse.json(review, { status: 201 });
