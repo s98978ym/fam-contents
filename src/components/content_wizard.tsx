@@ -26,6 +26,7 @@ export interface GenerationSettings {
   customInstructions: string;
   taste: string;
   wordCount: string;
+  volume: number;
   imageHandling: string;
   promptVersionId: string;
 }
@@ -122,6 +123,25 @@ export const WORD_COUNT_OPTIONS: Record<string, { value: string; label: string }
     { value: "medium", label: "標準（〜100文字）" },
     { value: "step", label: "ステップ配信（5通セット）" },
   ],
+};
+
+// Slider-based volume config per channel: min, max, step, default, unit
+export const VOLUME_SLIDER_CONFIG: Record<string, { min: number; max: number; step: number; default: number; unit: string; format: (v: number) => string }> = {
+  instagram_reels:    { min: 100, max: 500,  step: 50,  default: 300, unit: "文字", format: (v) => `${v}文字（約${Math.round(v / 5)}秒）` },
+  instagram_stories:  { min: 3,   max: 10,   step: 1,   default: 5,   unit: "枚",   format: (v) => `${v}枚構成` },
+  instagram_feed:     { min: 3,   max: 10,   step: 1,   default: 5,   unit: "枚",   format: (v) => `${v}枚カルーセル` },
+  event_lp:           { min: 500, max: 4000, step: 250, default: 2000, unit: "文字", format: (v) => `約${v.toLocaleString()}文字` },
+  note:               { min: 1000,max: 8000, step: 500, default: 4000, unit: "文字", format: (v) => `約${v.toLocaleString()}文字` },
+  line:               { min: 30,  max: 200,  step: 10,  default: 80,  unit: "文字", format: (v) => `約${v}文字` },
+};
+
+// Prompt descriptions for intuitive display
+export const PROMPT_DESCRIPTIONS: Record<string, { icon: string; description: string; tags: string[] }> = {
+  planner:   { icon: "🧠", description: "コンテンツの方向性・構成を企画するAIプランナー。ファイル分析結果をもとに最適な構成を提案します。", tags: ["企画", "構成", "全チャネル共通"] },
+  instagram: { icon: "📸", description: "Instagram向けのフック・キャプション・ハッシュタグを最適化。エンゲージメント率を考慮した投稿文を生成します。", tags: ["Reels", "Stories", "Feed"] },
+  lp:        { icon: "🌐", description: "イベントLP向けのヘッドライン・ベネフィット・FAQ・SEOメタ情報を一括生成。CVR最適化を考慮します。", tags: ["LP", "SEO", "CTA"] },
+  note:      { icon: "✍️", description: "note向けの長文記事を生成。読者の離脱を防ぐ導入・本文構成・まとめを最適化します。", tags: ["記事", "SEO", "リード文"] },
+  line:      { icon: "💬", description: "LINE公式向けの配信メッセージ・ステップ配信・リッチメニューテキストを生成します。", tags: ["配信", "ステップ", "リッチメニュー"] },
 };
 
 export const IMAGE_OPTIONS = [
@@ -407,24 +427,6 @@ export function StepRequirements({
 
       {settings.channel && (
         <>
-          {/* Prompt Version */}
-          <div>
-            <Label hint="プロンプト管理で登録したカスタムプロンプトを選択できます">使用プロンプト</Label>
-            <select
-              value={settings.promptVersionId}
-              onChange={(e) => setSettings({ ...settings, promptVersionId: e.target.value })}
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full max-w-md mb-2"
-            >
-              <option value="">デフォルト</option>
-              {relevantPrompts.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} v{p.version}（{p.type}）</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-400 mb-4">
-              カスタムプロンプトは <a href="/prompt-versions" className="text-blue-500 underline">プロンプト管理</a> ページで追加・編集できます。
-            </p>
-          </div>
-
           {/* Taste - button grid (blog-cms style) */}
           <div>
             <Label>テイスト（トーン＆マナー）</Label>
@@ -442,21 +444,43 @@ export function StepRequirements({
             </div>
           </div>
 
-          {/* Word count - button grid */}
+          {/* Volume slider */}
           <div>
-            <Label>文字数 / ボリューム</Label>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {wordCountOpts.map((w) => (
-                <button
-                  key={w.value}
-                  type="button"
-                  onClick={() => setSettings({ ...settings, wordCount: w.value })}
-                  className={`px-3 py-2.5 rounded-md text-sm border transition-all ${settings.wordCount === w.value ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white border-gray-300 hover:bg-gray-50"}`}
-                >
-                  {w.label}
-                </button>
-              ))}
-            </div>
+            <Label>ボリューム</Label>
+            {(() => {
+              const sliderCfg = VOLUME_SLIDER_CONFIG[settings.channel];
+              if (!sliderCfg) return null;
+              const currentVolume = settings.volume || sliderCfg.default;
+              const pct = ((currentVolume - sliderCfg.min) / (sliderCfg.max - sliderCfg.min)) * 100;
+              return (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-gray-400">{sliderCfg.min}{sliderCfg.unit}</span>
+                    <span className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                      {sliderCfg.format(currentVolume)}
+                    </span>
+                    <span className="text-xs text-gray-400">{sliderCfg.max.toLocaleString()}{sliderCfg.unit}</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="range"
+                      min={sliderCfg.min}
+                      max={sliderCfg.max}
+                      step={sliderCfg.step}
+                      value={currentVolume}
+                      onChange={(e) => setSettings({ ...settings, volume: Number(e.target.value) })}
+                      className="w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer accent-blue-600"
+                      style={{ background: `linear-gradient(to right, #2563eb 0%, #2563eb ${pct}%, #e5e7eb ${pct}%, #e5e7eb 100%)` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-gray-400">コンパクト</span>
+                    <span className="text-[10px] text-gray-400">標準</span>
+                    <span className="text-[10px] text-gray-400">詳細</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Photo selection grid (blog-cms style) */}
@@ -513,16 +537,75 @@ export function StepRequirements({
             </div>
           </div>
 
-          {/* Custom instructions */}
-          <div>
-            <Label hint="任意。AIへの追加指示があれば入力してください">カスタム指示</Label>
-            <Textarea
-              value={settings.customInstructions}
-              onChange={(e) => setSettings({ ...settings, customInstructions: e.target.value })}
-              rows={3}
-              placeholder="例: FAMのアカデミー向けに、初心者にもわかりやすいトーンで。免責文は必ず入れてください。"
-            />
-          </div>
+          {/* Advanced settings (collapsible) */}
+          <details className="group">
+            <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-3">
+              <svg className="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              詳細設定（任意）
+            </summary>
+            <div className="space-y-5 pl-1">
+              {/* Custom instructions */}
+              <div>
+                <Label hint="AIへの追加指示があれば入力（例: 初心者向けに、免責文を入れて）">カスタム指示</Label>
+                <Textarea
+                  value={settings.customInstructions}
+                  onChange={(e) => setSettings({ ...settings, customInstructions: e.target.value })}
+                  rows={3}
+                  placeholder="AIへの追加指示があれば入力（例: 初心者向けに、免責文を入れて）"
+                />
+              </div>
+
+              {/* Prompt Version */}
+              <div>
+                <Label>プロンプトバージョン</Label>
+                <select
+                  value={settings.promptVersionId}
+                  onChange={(e) => setSettings({ ...settings, promptVersionId: e.target.value })}
+                  className="border border-gray-300 rounded-md px-3 py-2.5 text-sm w-full max-w-md mb-2"
+                >
+                  <option value="">デフォルト（推奨）</option>
+                  {relevantPrompts.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} v{p.version}</option>
+                  ))}
+                </select>
+                {/* Prompt detail card */}
+                {(() => {
+                  const selectedPrompt = settings.promptVersionId
+                    ? relevantPrompts.find((p) => p.id === settings.promptVersionId)
+                    : null;
+                  const promptType = selectedPrompt?.type ?? getPromptType(settings.channel);
+                  const desc = PROMPT_DESCRIPTIONS[promptType];
+                  if (!desc) return null;
+                  return (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-1">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl shrink-0">{desc.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-gray-800">
+                              {selectedPrompt ? `${selectedPrompt.name} v${selectedPrompt.version}` : "デフォルトプロンプト"}
+                            </span>
+                            {!settings.promptVersionId && (
+                              <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-medium">推奨</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 leading-relaxed mb-2">{desc.description}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {desc.tags.map((tag) => (
+                              <span key={tag} className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{tag}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <p className="text-xs text-gray-400 mt-2">
+                  <a href="/prompt-versions" className="text-blue-500 underline">プロンプト管理</a> で設定したカスタムプロンプトを使用できます。
+                </p>
+              </div>
+            </div>
+          </details>
         </>
       )}
     </div>
