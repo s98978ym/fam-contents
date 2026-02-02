@@ -376,6 +376,8 @@ export default function VariantDetailPage() {
   // Overall review
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewForm, setReviewForm] = useState({ reviewer: "", role: "supervisor", decision: "approved", comment: "" });
+  const reviewFormRef = useRef(reviewForm);
+  reviewFormRef.current = reviewForm;
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState("");
   const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
@@ -443,17 +445,18 @@ export default function VariantDetailPage() {
   }
 
   async function handleSubmitReview() {
-    if (!variant || !reviewForm.reviewer.trim() || !reviewForm.comment.trim()) return;
+    const form = reviewFormRef.current;
+    if (!variant || !form.reviewer.trim() || !form.comment.trim()) return;
     setSubmitting(true);
     const res = await fetch("/api/reviews", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         content_id: variant.content_id,
-        reviewer: reviewForm.reviewer,
-        role: reviewForm.role,
-        decision: reviewForm.decision,
-        comment: reviewForm.comment,
+        reviewer: form.reviewer,
+        role: form.role,
+        decision: form.decision,
+        comment: form.comment,
         labels: [],
       }),
     });
@@ -461,8 +464,8 @@ export default function VariantDetailPage() {
       const review: Review = await res.json();
       setReviews((prev) => [...prev, review]);
       setShowReviewForm(false);
+      setToast(form.decision === "approved" ? "承認しました" : form.decision === "rejected" ? "却下しました" : "修正依頼を送信しました");
       setReviewForm({ reviewer: "", role: "supervisor", decision: "approved", comment: "" });
-      setToast(reviewForm.decision === "approved" ? "承認しました" : "フィードバックを送信しました");
       setTimeout(() => setToast(""), 3000);
     }
     setSubmitting(false);
