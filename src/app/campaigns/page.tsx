@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { sampleCampaigns } from "@/lib/sample_data";
-import { sampleVariants } from "@/lib/sample_data";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { sampleCampaigns, sampleVariants } from "@/lib/sample_data";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -10,26 +9,18 @@ import { sampleVariants } from "@/lib/sample_data";
 
 type Objective = "acquisition" | "retention" | "trust" | "recruitment" | "event";
 
-const OBJECTIVE_CONFIG: Record<Objective, { label: string; color: string; icon: string }> = {
-  acquisition: { label: "新規獲得", color: "blue", icon: "🎯" },
-  retention:   { label: "リテンション", color: "green", icon: "🔄" },
-  trust:       { label: "信頼構築", color: "purple", icon: "🛡" },
-  recruitment: { label: "採用", color: "orange", icon: "👥" },
-  event:       { label: "イベント", color: "pink", icon: "📅" },
-};
-
-const OBJECTIVE_COLORS: Record<string, { bg: string; border: string; text: string; badge: string; bar: string }> = {
-  blue:   { bg: "bg-blue-50",   border: "border-blue-200",   text: "text-blue-700",   badge: "bg-blue-100 text-blue-700",   bar: "bg-blue-400" },
-  green:  { bg: "bg-green-50",  border: "border-green-200",  text: "text-green-700",  badge: "bg-green-100 text-green-700",  bar: "bg-green-400" },
-  purple: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-700", bar: "bg-purple-400" },
-  orange: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-700", bar: "bg-orange-400" },
-  pink:   { bg: "bg-pink-50",   border: "border-pink-200",   text: "text-pink-700",   badge: "bg-pink-100 text-pink-700",   bar: "bg-pink-400" },
+const OBJECTIVE_CONFIG: Record<Objective, { label: string; bar: string; barHover: string; dot: string; text: string; border: string; bg: string; headerBg: string }> = {
+  acquisition: { label: "新規獲得",       bar: "bg-indigo-400",  barHover: "bg-indigo-500",  dot: "bg-indigo-500 ring-indigo-200",  text: "text-indigo-600",  border: "border-indigo-200",  bg: "bg-indigo-50",  headerBg: "bg-indigo-500" },
+  retention:   { label: "リテンション",   bar: "bg-teal-400",    barHover: "bg-teal-500",    dot: "bg-teal-500 ring-teal-200",      text: "text-teal-600",    border: "border-teal-200",    bg: "bg-teal-50",    headerBg: "bg-teal-500" },
+  trust:       { label: "信頼構築",       bar: "bg-violet-400",  barHover: "bg-violet-500",  dot: "bg-violet-500 ring-violet-200",  text: "text-violet-600",  border: "border-violet-200",  bg: "bg-violet-50",  headerBg: "bg-violet-500" },
+  recruitment: { label: "採用",           bar: "bg-amber-400",   barHover: "bg-amber-500",   dot: "bg-amber-500 ring-amber-200",    text: "text-amber-600",   border: "border-amber-200",   bg: "bg-amber-50",   headerBg: "bg-amber-500" },
+  event:       { label: "イベント",       bar: "bg-rose-400",    barHover: "bg-rose-500",    dot: "bg-rose-500 ring-rose-200",      text: "text-rose-600",    border: "border-rose-200",    bg: "bg-rose-50",    headerBg: "bg-rose-500" },
 };
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  planning:  { label: "準備中", cls: "bg-gray-100 text-gray-600" },
-  active:    { label: "実施中", cls: "bg-green-100 text-green-700" },
-  completed: { label: "完了", cls: "bg-blue-100 text-blue-700" },
+  planning:  { label: "準備中", cls: "bg-slate-100 text-slate-500" },
+  active:    { label: "実施中", cls: "bg-emerald-50 text-emerald-600" },
+  completed: { label: "完了",   cls: "bg-sky-50 text-sky-600" },
 };
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -41,20 +32,29 @@ const CHANNEL_LABEL: Record<string, string> = {
   line: "LINE",
 };
 
+const CHANNEL_COLOR: Record<string, string> = {
+  instagram_reels: "bg-gradient-to-r from-pink-500 to-purple-500",
+  instagram_stories: "bg-gradient-to-r from-orange-400 to-pink-500",
+  instagram_feed: "bg-gradient-to-r from-purple-500 to-indigo-500",
+  event_lp: "bg-emerald-500",
+  note: "bg-slate-700",
+  line: "bg-green-500",
+};
+
 const VARIANT_STATUS: Record<string, { label: string; cls: string }> = {
-  draft:            { label: "下書き",     cls: "bg-gray-100 text-gray-600" },
-  review_requested: { label: "レビュー待ち", cls: "bg-yellow-100 text-yellow-700" },
-  approved:         { label: "承認済み",    cls: "bg-green-100 text-green-700" },
-  published:        { label: "配信済み",    cls: "bg-blue-100 text-blue-700" },
+  draft:    { label: "下書き",     cls: "text-slate-500 bg-slate-100" },
+  review:   { label: "レビュー待ち", cls: "text-amber-600 bg-amber-50" },
+  approved: { label: "承認済み",    cls: "text-emerald-600 bg-emerald-50" },
+  published:{ label: "配信済み",    cls: "text-sky-600 bg-sky-50" },
 };
 
 const WEEK_OPTIONS = [
-  { value: 1, label: "1週間" },
-  { value: 2, label: "2週間" },
-  { value: 4, label: "4週間" },
-  { value: 8, label: "8週間" },
-  { value: 12, label: "12週間" },
-  { value: 24, label: "24週間" },
+  { value: 1, label: "1w" },
+  { value: 2, label: "2w" },
+  { value: 4, label: "4w" },
+  { value: 8, label: "8w" },
+  { value: 12, label: "12w" },
+  { value: 24, label: "24w" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,86 @@ function fmtDate(d: Date): string {
 function getVariantSummary(v: { body?: Record<string, unknown> }): string {
   if (!v.body) return "";
   const b = v.body;
-  return String(b.hook ?? b.title ?? b.title_option1 ?? b.message_text ?? b.slide1_cover ?? b.countdown_title ?? "").slice(0, 50);
+  return String(b.hook ?? b.title ?? b.title_option1 ?? b.message_text ?? b.slide1_cover ?? b.countdown_title ?? "").slice(0, 40);
+}
+
+// ---------------------------------------------------------------------------
+// Popover for timeline dot
+// ---------------------------------------------------------------------------
+
+interface DotInfo {
+  variant: typeof sampleVariants[number];
+  campaign: typeof sampleCampaigns[number];
+  objective: Objective;
+  x: number;
+  y: number;
+}
+
+function DotPopover({ info, onClose }: { info: DotInfo; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const v = info.variant;
+  const cfg = OBJECTIVE_CONFIG[info.objective];
+  const vs = VARIANT_STATUS[v.status] ?? VARIANT_STATUS.draft;
+  const chColor = CHANNEL_COLOR[v.channel] ?? "bg-slate-500";
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 w-72 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden"
+      style={{ left: Math.min(info.x - 136, window.innerWidth - 300), top: info.y + 12 }}
+    >
+      {/* Header bar */}
+      <div className={`${cfg.headerBg} px-4 py-2 flex items-center justify-between`}>
+        <span className="text-white text-xs font-medium truncate">{info.campaign.name}</span>
+        <button onClick={onClose} className="text-white/70 hover:text-white ml-2 shrink-0">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <div className="px-4 py-3">
+        {/* Channel + status */}
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className={`${chColor} text-white text-[10px] font-semibold px-2 py-0.5 rounded`}>
+            {CHANNEL_LABEL[v.channel] ?? v.channel}
+          </span>
+          <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${vs.cls}`}>{vs.label}</span>
+        </div>
+        {/* Summary */}
+        <p className="text-sm text-slate-800 font-medium leading-snug mb-2">
+          {getVariantSummary(v) || "(内容なし)"}
+        </p>
+        {/* Date */}
+        {v.scheduled_at && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            <span>{new Date(v.scheduled_at).toLocaleDateString("ja-JP", { year: "numeric", month: "short", day: "numeric" })}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SVG Icons (small inline)
+// ---------------------------------------------------------------------------
+
+function IconObj({ obj }: { obj: Objective }) {
+  const cls = "w-4 h-4";
+  switch (obj) {
+    case "acquisition": return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
+    case "retention": return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>;
+    case "trust": return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>;
+    case "recruitment": return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
+    case "event": return <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -89,13 +168,13 @@ export default function CampaignsPage() {
   const [weeks, setWeeks] = useState(2);
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
   const [expandedVariant, setExpandedVariant] = useState<string | null>(null);
+  const [dotInfo, setDotInfo] = useState<DotInfo | null>(null);
 
   const today = useMemo(() => new Date(), []);
   const timelineStart = useMemo(() => startOfWeek(today), [today]);
   const totalDays = weeks * 7;
   const timelineEnd = addDays(timelineStart, totalDays);
 
-  // Generate week markers
   const weekMarkers = useMemo(() => {
     const markers: { date: Date; label: string; offsetPct: number }[] = [];
     for (let i = 0; i <= weeks; i++) {
@@ -105,7 +184,6 @@ export default function CampaignsPage() {
     return markers;
   }, [timelineStart, weeks, totalDays]);
 
-  // Group campaigns by objective
   const grouped = useMemo(() => {
     const map = new Map<Objective, typeof sampleCampaigns>();
     for (const c of sampleCampaigns) {
@@ -116,66 +194,70 @@ export default function CampaignsPage() {
     return map;
   }, []);
 
-  // Get variants for a campaign
   function getVariantsForCampaign(contentIds: string[]) {
     return sampleVariants.filter((v) => contentIds.includes(v.content_id));
   }
 
-  // Calculate bar position for a campaign on timeline
   function getBarStyle(startDate: string, endDate: string) {
     const s = new Date(startDate);
     const e = new Date(endDate);
     const tsMs = timelineStart.getTime();
     const teMs = timelineEnd.getTime();
     const spanMs = teMs - tsMs;
-
     const leftMs = Math.max(s.getTime() - tsMs, 0);
     const rightMs = Math.min(e.getTime() - tsMs, spanMs);
     if (rightMs <= 0 || leftMs >= spanMs) return null;
-
-    return {
-      left: `${(leftMs / spanMs) * 100}%`,
-      width: `${((rightMs - leftMs) / spanMs) * 100}%`,
-    };
+    return { left: `${(leftMs / spanMs) * 100}%`, width: `${((rightMs - leftMs) / spanMs) * 100}%` };
   }
 
-  // Get scheduled content dots on timeline for a campaign
-  function getContentDots(contentIds: string[]) {
+  function getContentDots(contentIds: string[], campaign: typeof sampleCampaigns[number], objective: Objective) {
     const variants = getVariantsForCampaign(contentIds);
-    const dots: { offsetPct: number; variant: typeof sampleVariants[0] }[] = [];
     const tsMs = timelineStart.getTime();
     const spanMs = timelineEnd.getTime() - tsMs;
-
-    for (const v of variants) {
-      if (!v.scheduled_at) continue;
-      const vMs = new Date(v.scheduled_at).getTime();
-      if (vMs < tsMs || vMs > tsMs + spanMs) continue;
-      dots.push({ offsetPct: ((vMs - tsMs) / spanMs) * 100, variant: v });
-    }
-    return dots;
+    return variants
+      .filter((v) => v.scheduled_at)
+      .map((v) => {
+        const vMs = new Date(v.scheduled_at!).getTime();
+        if (vMs < tsMs || vMs > tsMs + spanMs) return null;
+        return { offsetPct: ((vMs - tsMs) / spanMs) * 100, variant: v, campaign, objective };
+      })
+      .filter(Boolean) as { offsetPct: number; variant: typeof sampleVariants[number]; campaign: typeof sampleCampaigns[number]; objective: Objective }[];
   }
+
+  function handleDotClick(e: React.MouseEvent, dot: { variant: typeof sampleVariants[number]; campaign: typeof sampleCampaigns[number]; objective: Objective }) {
+    e.stopPropagation();
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    setDotInfo({ variant: dot.variant, campaign: dot.campaign, objective: dot.objective, x: rect.left + rect.width / 2, y: rect.bottom });
+  }
+
+  const todayPct = useMemo(() => {
+    const tsMs = timelineStart.getTime();
+    const spanMs = timelineEnd.getTime() - tsMs;
+    return ((today.getTime() - tsMs) / spanMs) * 100;
+  }, [today, timelineStart, timelineEnd]);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="text-2xl font-bold">キャンペーン一覧</h2>
-      </div>
-      <p className="text-sm text-gray-500 mb-5">マーケティング戦略と施策を目的別に確認できます。タイムラインで配信スケジュールを俯瞰できます。</p>
+      {/* Popover */}
+      {dotInfo && <DotPopover info={dotInfo} onClose={() => setDotInfo(null)} />}
+
+      <h2 className="text-xl font-bold text-slate-800 mb-1">キャンペーン</h2>
+      <p className="text-sm text-slate-400 mb-5">目的別の施策とコンテンツ配信スケジュール</p>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Timeline header                                                    */}
+      {/* Timeline                                                           */}
       {/* ----------------------------------------------------------------- */}
-      <div className="bg-white rounded-lg border border-gray-200 mb-6">
-        {/* Week range selector */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
-          <span className="text-xs font-medium text-gray-500">表示期間</span>
-          <div className="flex gap-1">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-8 overflow-hidden">
+        {/* Period selector */}
+        <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50 border-b border-slate-100">
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Timeline</span>
+          <div className="flex gap-0.5 bg-slate-200/60 rounded-lg p-0.5">
             {WEEK_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => setWeeks(opt.value)}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                  weeks === opt.value ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                onClick={() => { setWeeks(opt.value); setDotInfo(null); }}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                  weeks === opt.value ? "bg-white text-slate-700 shadow-sm" : "text-slate-400 hover:text-slate-600"
                 }`}
               >
                 {opt.label}
@@ -184,15 +266,15 @@ export default function CampaignsPage() {
           </div>
         </div>
 
-        {/* Timeline ruler */}
-        <div className="px-4 py-3">
-          <div className="flex items-center mb-1">
-            <div className="w-48 shrink-0" />
-            <div className="flex-1 relative h-5">
+        <div className="px-5 pt-3 pb-4">
+          {/* Date labels */}
+          <div className="flex items-end">
+            <div className="w-52 shrink-0" />
+            <div className="flex-1 relative h-4">
               {weekMarkers.map((m, i) => (
                 <span
                   key={i}
-                  className="absolute text-[10px] text-gray-400 -translate-x-1/2"
+                  className="absolute text-[10px] font-medium text-slate-400 -translate-x-1/2 tabular-nums"
                   style={{ left: `${m.offsetPct}%` }}
                 >
                   {m.label}
@@ -200,79 +282,77 @@ export default function CampaignsPage() {
               ))}
             </div>
           </div>
-          {/* Tick line */}
-          <div className="flex items-center">
-            <div className="w-48 shrink-0" />
-            <div className="flex-1 relative h-px bg-gray-200">
+
+          {/* Ruler */}
+          <div className="flex items-center mt-0.5 mb-2">
+            <div className="w-52 shrink-0" />
+            <div className="flex-1 relative h-px bg-slate-200">
               {weekMarkers.map((m, i) => (
-                <div
-                  key={i}
-                  className="absolute w-px h-2 bg-gray-300 -top-0.5"
-                  style={{ left: `${m.offsetPct}%` }}
-                />
+                <div key={i} className="absolute w-px h-1.5 bg-slate-300 -top-px" style={{ left: `${m.offsetPct}%` }} />
               ))}
-              {/* Today marker */}
-              {(() => {
-                const tsMs = timelineStart.getTime();
-                const spanMs = timelineEnd.getTime() - tsMs;
-                const todayPct = ((today.getTime() - tsMs) / spanMs) * 100;
-                if (todayPct < 0 || todayPct > 100) return null;
-                return (
-                  <div
-                    className="absolute w-0.5 h-3 bg-red-500 -top-1 rounded"
-                    style={{ left: `${todayPct}%` }}
-                    title={`今日 ${fmtDate(today)}`}
-                  />
-                );
-              })()}
+              {/* Today line (full height below) */}
+              {todayPct >= 0 && todayPct <= 100 && (
+                <div className="absolute -top-1 flex flex-col items-center" style={{ left: `${todayPct}%` }}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Campaign bars grouped by objective */}
-          <div className="mt-3 space-y-4">
+          {/* Gantt rows */}
+          <div className="space-y-3">
             {Array.from(grouped.entries()).map(([objective, campaigns]) => {
               const cfg = OBJECTIVE_CONFIG[objective];
-              const colors = OBJECTIVE_COLORS[cfg.color];
               return (
                 <div key={objective}>
-                  {/* Objective group label */}
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className="text-sm">{cfg.icon}</span>
-                    <span className={`text-xs font-bold ${colors.text}`}>{cfg.label}</span>
+                  {/* Category header */}
+                  <div className="flex items-center mb-1">
+                    <div className="w-52 shrink-0 flex items-center gap-1.5 pr-3">
+                      <span className={cfg.text}><IconObj obj={objective} /></span>
+                      <span className={`text-[11px] font-bold ${cfg.text} uppercase tracking-wide`}>{cfg.label}</span>
+                    </div>
+                    <div className="flex-1 h-px bg-slate-100" />
                   </div>
 
-                  {/* Bars */}
+                  {/* Campaigns */}
                   {campaigns.map((camp) => {
                     const barStyle = getBarStyle(camp.start_date, camp.end_date);
-                    const dots = getContentDots(camp.content_ids);
+                    const dots = getContentDots(camp.content_ids, camp, objective);
+                    const isActive = expandedCampaign === camp.id;
                     return (
                       <div
                         key={camp.id}
-                        className="flex items-center mb-1 cursor-pointer group"
-                        onClick={() => setExpandedCampaign(expandedCampaign === camp.id ? null : camp.id)}
+                        className={`flex items-center py-0.5 cursor-pointer group rounded-md transition-colors ${isActive ? "bg-slate-50" : "hover:bg-slate-50/50"}`}
+                        onClick={() => { setExpandedCampaign(isActive ? null : camp.id); setExpandedVariant(null); }}
                       >
-                        <div className="w-48 shrink-0 truncate pr-3">
-                          <span className="text-xs text-gray-700 group-hover:text-blue-600 transition-colors">
+                        <div className="w-52 shrink-0 truncate pr-3 pl-6">
+                          <span className={`text-xs transition-colors ${isActive ? "text-slate-800 font-medium" : "text-slate-500 group-hover:text-slate-700"}`}>
                             {camp.name}
                           </span>
                         </div>
-                        <div className="flex-1 relative h-6">
-                          {/* Background grid lines */}
-                          <div className="absolute inset-0 border-l border-gray-100" />
+                        <div className="flex-1 relative h-7">
+                          {/* Today vertical line */}
+                          {todayPct >= 0 && todayPct <= 100 && (
+                            <div className="absolute top-0 bottom-0 w-px bg-red-500/10" style={{ left: `${todayPct}%` }} />
+                          )}
+                          {/* Bar */}
                           {barStyle && (
                             <div
-                              className={`absolute top-1 h-4 rounded ${colors.bar} opacity-80 group-hover:opacity-100 transition-opacity`}
+                              className={`absolute top-1.5 h-4 rounded-full transition-colors ${isActive ? cfg.barHover : cfg.bar} ${isActive ? "opacity-100" : "opacity-70 group-hover:opacity-90"}`}
                               style={{ left: barStyle.left, width: barStyle.width }}
                             />
                           )}
-                          {/* Content dots */}
+                          {/* Dots */}
                           {dots.map((dot, di) => (
-                            <div
+                            <button
                               key={di}
-                              className="absolute top-1.5 w-3 h-3 rounded-full bg-white border-2 border-gray-700 -translate-x-1.5 z-10"
+                              className={`absolute top-1 w-5 h-5 rounded-full -translate-x-2.5 z-10 flex items-center justify-center transition-all ring-2 ring-white hover:ring-4 hover:scale-125 ${cfg.dot} shadow-sm`}
                               style={{ left: `${dot.offsetPct}%` }}
-                              title={`${CHANNEL_LABEL[dot.variant.channel] ?? dot.variant.channel} - ${new Date(dot.variant.scheduled_at!).toLocaleDateString("ja-JP")}`}
-                            />
+                              onClick={(e) => handleDotClick(e, dot)}
+                              title={`${CHANNEL_LABEL[dot.variant.channel] ?? dot.variant.channel}`}
+                            >
+                              <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -286,137 +366,143 @@ export default function CampaignsPage() {
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Campaign cards by objective                                        */}
+      {/* Cards by objective                                                 */}
       {/* ----------------------------------------------------------------- */}
-      {Array.from(grouped.entries()).map(([objective, campaigns]) => {
-        const cfg = OBJECTIVE_CONFIG[objective];
-        const colors = OBJECTIVE_COLORS[cfg.color];
+      <div className="space-y-6">
+        {Array.from(grouped.entries()).map(([objective, campaigns]) => {
+          const cfg = OBJECTIVE_CONFIG[objective];
+          return (
+            <div key={objective}>
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className={`w-6 h-6 rounded-lg ${cfg.headerBg} flex items-center justify-center text-white`}>
+                  <IconObj obj={objective} />
+                </div>
+                <h3 className="text-sm font-bold text-slate-700">{cfg.label}</h3>
+                <span className="text-xs text-slate-400">{campaigns.length}</span>
+              </div>
 
-        return (
-          <div key={objective} className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-lg">{cfg.icon}</span>
-              <h3 className={`text-sm font-bold ${colors.text}`}>{cfg.label}</h3>
-              <span className="text-xs text-gray-400">({campaigns.length}件)</span>
-            </div>
+              <div className="space-y-2">
+                {campaigns.map((camp) => {
+                  const st = STATUS_LABEL[camp.status] ?? STATUS_LABEL.planning;
+                  const isExpanded = expandedCampaign === camp.id;
+                  const variants = getVariantsForCampaign(camp.content_ids);
 
-            <div className="space-y-2">
-              {campaigns.map((camp) => {
-                const st = STATUS_LABEL[camp.status] ?? STATUS_LABEL.planning;
-                const isExpanded = expandedCampaign === camp.id;
-                const variants = getVariantsForCampaign(camp.content_ids);
-
-                return (
-                  <div
-                    key={camp.id}
-                    className={`bg-white rounded-lg border transition-colors ${
-                      isExpanded ? `${colors.border} shadow-sm` : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    {/* Card header */}
+                  return (
                     <div
-                      className="px-5 py-3 cursor-pointer flex items-center justify-between gap-4"
-                      onClick={() => setExpandedCampaign(isExpanded ? null : camp.id)}
+                      key={camp.id}
+                      className={`rounded-xl border overflow-hidden transition-all ${
+                        isExpanded ? `${cfg.border} shadow-sm` : "border-slate-200 hover:border-slate-300"
+                      }`}
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-sm font-medium text-gray-800">{camp.name}</span>
-                          <span className={`px-2 py-0.5 text-[10px] rounded-full font-medium ${st.cls}`}>{st.label}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
-                          <span>{camp.start_date} 〜 {camp.end_date}</span>
-                          <span>コンテンツ {camp.content_ids.length}件</span>
-                          {variants.length > 0 && (
-                            <span>配信 {variants.filter((v) => v.scheduled_at).length}件</span>
-                          )}
-                        </div>
-                      </div>
-                      <svg
-                        className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                      {/* Card header */}
+                      <div
+                        className={`px-5 py-3.5 cursor-pointer flex items-center justify-between gap-4 transition-colors ${
+                          isExpanded ? cfg.bg : "bg-white hover:bg-slate-50/50"
+                        }`}
+                        onClick={() => { setExpandedCampaign(isExpanded ? null : camp.id); setExpandedVariant(null); }}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-sm font-semibold text-slate-800">{camp.name}</span>
+                            <span className={`px-2 py-0.5 text-[10px] rounded-full font-semibold ${st.cls}`}>{st.label}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                            <span className="tabular-nums">{camp.start_date} — {camp.end_date}</span>
+                            <span>{camp.content_ids.length} コンテンツ</span>
+                            {variants.filter((v) => v.scheduled_at).length > 0 && (
+                              <span>{variants.filter((v) => v.scheduled_at).length} 配信予定</span>
+                            )}
+                          </div>
+                        </div>
+                        <svg
+                          className={`w-4 h-4 text-slate-300 transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`}
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
 
-                    {/* Expanded: variants list */}
-                    {isExpanded && (
-                      <div className="border-t border-gray-100 px-5 py-3">
-                        {variants.length === 0 ? (
-                          <p className="text-sm text-gray-400 py-2">コンテンツがまだ登録されていません。</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {variants.map((v) => {
-                              const vs = VARIANT_STATUS[v.status] ?? VARIANT_STATUS.draft;
-                              const isVarExpanded = expandedVariant === v.id;
-                              return (
-                                <div
-                                  key={v.id}
-                                  className={`rounded-md border transition-colors ${
-                                    isVarExpanded ? "border-gray-300 bg-gray-50" : "border-gray-200"
-                                  }`}
-                                >
+                      {/* Expanded */}
+                      {isExpanded && (
+                        <div className="bg-white border-t border-slate-100 px-5 py-3">
+                          {variants.length === 0 ? (
+                            <p className="text-sm text-slate-400 py-3">登録されたコンテンツはありません</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {variants.map((v) => {
+                                const vs = VARIANT_STATUS[v.status] ?? VARIANT_STATUS.draft;
+                                const chColor = CHANNEL_COLOR[v.channel] ?? "bg-slate-500";
+                                const isVarExpanded = expandedVariant === v.id;
+                                return (
                                   <div
-                                    className="px-4 py-2.5 flex items-center justify-between gap-3 cursor-pointer"
-                                    onClick={() => setExpandedVariant(isVarExpanded ? null : v.id)}
+                                    key={v.id}
+                                    className={`rounded-lg border transition-all overflow-hidden ${
+                                      isVarExpanded ? "border-slate-300 shadow-sm" : "border-slate-150 hover:border-slate-300"
+                                    }`}
                                   >
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                      <span className="px-2 py-0.5 text-[10px] rounded font-medium bg-blue-50 text-blue-700 shrink-0">
-                                        {CHANNEL_LABEL[v.channel] ?? v.channel}
-                                      </span>
-                                      <span className={`px-2 py-0.5 text-[10px] rounded font-medium shrink-0 ${vs.cls}`}>
-                                        {vs.label}
-                                      </span>
-                                      <span className="text-sm text-gray-700 truncate">
-                                        {getVariantSummary(v) || "(内容なし)"}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      {v.scheduled_at && (
-                                        <span className="text-[10px] text-gray-400">
-                                          {new Date(v.scheduled_at).toLocaleDateString("ja-JP")}
+                                    <div
+                                      className={`px-4 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                                        isVarExpanded ? "bg-slate-50" : "hover:bg-slate-50/50"
+                                      }`}
+                                      onClick={() => setExpandedVariant(isVarExpanded ? null : v.id)}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className={`${chColor} text-white text-[10px] font-semibold px-2 py-0.5 rounded shrink-0`}>
+                                          {CHANNEL_LABEL[v.channel] ?? v.channel}
                                         </span>
-                                      )}
-                                      <svg
-                                        className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isVarExpanded ? "rotate-180" : ""}`}
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                      >
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                      </svg>
-                                    </div>
-                                  </div>
-
-                                  {/* Variant detail */}
-                                  {isVarExpanded && v.body && (
-                                    <div className="px-4 pb-3 border-t border-gray-200">
-                                      <div className="pt-3 space-y-1.5">
-                                        {Object.entries(v.body).map(([key, val]) => {
-                                          if (val == null) return null;
-                                          const display = Array.isArray(val) ? val.join(", ") : String(val);
-                                          return (
-                                            <div key={key} className="flex gap-2 text-xs">
-                                              <span className="text-gray-400 shrink-0 w-28 text-right">{key}</span>
-                                              <span className="text-gray-700 whitespace-pre-wrap">{display}</span>
-                                            </div>
-                                          );
-                                        })}
+                                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${vs.cls}`}>
+                                          {vs.label}
+                                        </span>
+                                        <span className="text-sm text-slate-600 truncate">
+                                          {getVariantSummary(v) || "(内容なし)"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {v.scheduled_at && (
+                                          <span className="text-[10px] text-slate-400 tabular-nums">
+                                            {new Date(v.scheduled_at).toLocaleDateString("ja-JP")}
+                                          </span>
+                                        )}
+                                        <svg
+                                          className={`w-3.5 h-3.5 text-slate-300 transition-transform ${isVarExpanded ? "rotate-180" : ""}`}
+                                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                                        >
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
                                       </div>
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                                    {isVarExpanded && v.body && (
+                                      <div className="px-4 pb-3 border-t border-slate-100 bg-white">
+                                        <div className="pt-3 space-y-1.5">
+                                          {Object.entries(v.body).map(([key, val]) => {
+                                            if (val == null) return null;
+                                            const display = Array.isArray(val) ? val.join(", ") : String(val);
+                                            return (
+                                              <div key={key} className="flex gap-3 text-xs">
+                                                <span className="text-slate-400 shrink-0 w-24 text-right font-mono">{key}</span>
+                                                <span className="text-slate-700 whitespace-pre-wrap">{display}</span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
