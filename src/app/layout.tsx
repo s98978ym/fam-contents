@@ -20,6 +20,9 @@ export default function RootLayout({
             <NavLink href="/">ダッシュボード</NavLink>
             <NavLink href="/campaigns">キャンペーン</NavLink>
             <NavLink href="/contents">コンテンツ</NavLink>
+            <NavLink href="/reviews">レビュー</NavLink>
+            <NavLink href="/publish-jobs">配信ジョブ</NavLink>
+            <NavLink href="/prompt-versions">プロンプト管理</NavLink>
           </nav>
           <main className="flex-1 p-6 overflow-auto">{children}</main>
         </div>
