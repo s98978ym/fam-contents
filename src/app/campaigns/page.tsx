@@ -171,6 +171,7 @@ export default function CampaignsPage() {
   const [expandedVariant, setExpandedVariant] = useState<string | null>(null);
   const [dotInfo, setDotInfo] = useState<DotInfo | null>(null);
   const [variants, setVariants] = useState<ChannelVariant[]>(() => [...sampleVariants]);
+  const [assigneeTab, setAssigneeTab] = useState<string>("all");
   const dragRef = useRef<{ variantId: string; timelineEl: HTMLElement; startX: number; tsMs: number; spanMs: number } | null>(null);
   const [dragPct, setDragPct] = useState<{ id: string; pct: number } | null>(null);
 
@@ -206,6 +207,15 @@ export default function CampaignsPage() {
     return map;
   }, []);
 
+  const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
+  useEffect(() => {
+    try { setRegisteredMembers(JSON.parse(localStorage.getItem("registered_members") ?? "[]")); } catch { /* */ }
+  }, []);
+
+  const allAssignees = useMemo(() =>
+    [...new Set([...registeredMembers, ...variants.map((v) => v.assignee).filter(Boolean) as string[]])].sort()
+  , [variants, registeredMembers]);
+
   function getVariantsForCampaign(contentIds: string[]) {
     return variants.filter((v) => contentIds.includes(v.content_id));
   }
@@ -223,7 +233,8 @@ export default function CampaignsPage() {
   }
 
   function getContentDots(contentIds: string[], campaign: typeof sampleCampaigns[number], objective: Objective) {
-    const cvariants = getVariantsForCampaign(contentIds);
+    const cvariants = getVariantsForCampaign(contentIds)
+      .filter((v) => assigneeTab === "all" || v.assignee === assigneeTab);
     const tsMs = timelineStart.getTime();
     const spanMs = timelineEnd.getTime() - tsMs;
     return cvariants
@@ -310,6 +321,29 @@ export default function CampaignsPage() {
             ))}
           </div>
         </div>
+
+        {/* Assignee tabs */}
+        {allAssignees.length > 0 && (
+          <div className="flex items-center gap-1 px-5 py-2 border-b border-slate-100 bg-white">
+            <span className="text-[10px] text-slate-400 mr-1">担当:</span>
+            {[
+              { key: "all", label: "全員" },
+              ...allAssignees.map((a) => ({ key: a, label: a })),
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => { setAssigneeTab(opt.key); setDotInfo(null); }}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                  assigneeTab === opt.key
+                    ? "bg-indigo-600 text-white"
+                    : "text-slate-500 hover:bg-slate-100"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="px-5 pt-3 pb-4">
           {/* Date labels */}

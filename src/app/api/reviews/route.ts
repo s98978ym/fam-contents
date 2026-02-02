@@ -14,11 +14,6 @@ export async function POST(request: Request) {
     }
   }
 
-  const content = contentStore.get(body.content_id);
-  if (!content) {
-    return NextResponse.json({ error: "Content not found" }, { status: 404 });
-  }
-
   const review = reviewStore.create({
     content_id: body.content_id,
     reviewer: body.reviewer,

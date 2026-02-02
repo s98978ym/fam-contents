@@ -73,6 +73,7 @@ export interface ChannelVariant {
   body: Record<string, unknown>;
   scheduled_at?: string;
   published_at?: string;
+  assignee?: string;
 }
 
 export interface Campaign {
