@@ -306,6 +306,8 @@ export default function CampaignsPage() {
   const [toast, setToast] = useState("");
   const dragRef = useRef<{ variantId: string; timelineEl: HTMLElement; startX: number; tsMs: number; spanMs: number } | null>(null);
   const [dragPct, setDragPct] = useState<{ id: string; pct: number } | null>(null);
+  const [dndVariant, setDndVariant] = useState<{ contentId: string; fromCampId: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2500); }, []);
 
@@ -332,6 +334,16 @@ export default function CampaignsPage() {
   }
   function unlinkVariant(campId: string, contentId: string) {
     setCampaigns((prev) => prev.map((c) => c.id === campId ? { ...c, content_ids: c.content_ids.filter((x) => x !== contentId) } : c));
+  }
+  function moveVariant(fromCampId: string, toCampId: string, contentId: string) {
+    if (fromCampId === toCampId) return;
+    setCampaigns((prev) => prev.map((c) => {
+      if (c.id === fromCampId) return { ...c, content_ids: c.content_ids.filter((x) => x !== contentId) };
+      if (c.id === toCampId && !c.content_ids.includes(contentId)) return { ...c, content_ids: [...c.content_ids, contentId] };
+      return c;
+    }));
+    const target = campaigns.find((c) => c.id === toCampId);
+    showToast(`「${target?.name}」に移動しました`);
   }
 
   const updateVariantDate = useCallback((variantId: string, newDate: Date) => {
@@ -580,8 +592,11 @@ export default function CampaignsPage() {
                     return (
                       <div key={camp.id}>
                         <div
-                          className={`flex items-center py-0.5 cursor-pointer group rounded-md transition-colors ${isActive ? "bg-slate-50" : "hover:bg-slate-50/50"}`}
+                          className={`flex items-center py-0.5 cursor-pointer group rounded-md transition-colors ${isActive ? "bg-slate-50" : "hover:bg-slate-50/50"} ${dropTarget === camp.id ? "ring-2 ring-indigo-400 bg-indigo-50/50" : ""}`}
                           onClick={() => { setExpandedCampaign(isActive ? null : camp.id); setExpandedVariant(null); }}
+                          onDragOver={(e) => { if (dndVariant && dndVariant.fromCampId !== camp.id) { e.preventDefault(); setDropTarget(camp.id); } }}
+                          onDragLeave={() => setDropTarget(null)}
+                          onDrop={(e) => { e.preventDefault(); if (dndVariant) { moveVariant(dndVariant.fromCampId, camp.id, dndVariant.contentId); setDndVariant(null); } setDropTarget(null); }}
                         >
                           <div className="w-52 shrink-0 truncate pr-3 pl-6 flex items-center gap-1.5">
                             <span className={`text-xs transition-colors ${isActive ? "text-slate-800 font-medium" : "text-slate-500 group-hover:text-slate-700"}`}>
@@ -666,9 +681,16 @@ export default function CampaignsPage() {
                                     const chColor = CHANNEL_COLOR[v.channel] ?? "bg-slate-500";
                                     const isVarExpanded = expandedVariant === v.id;
                                     return (
-                                      <div key={v.id} className={`rounded-lg border transition-all overflow-hidden ${isVarExpanded ? "border-slate-300 shadow-sm" : "border-slate-100 hover:border-slate-200"}`}>
+                                      <div
+                                        key={v.id}
+                                        draggable
+                                        onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDndVariant({ contentId: v.content_id, fromCampId: camp.id }); }}
+                                        onDragEnd={() => { setDndVariant(null); setDropTarget(null); }}
+                                        className={`rounded-lg border transition-all overflow-hidden ${isVarExpanded ? "border-slate-300 shadow-sm" : "border-slate-100 hover:border-slate-200"} ${dndVariant?.contentId === v.content_id ? "opacity-50" : ""} cursor-grab active:cursor-grabbing`}
+                                      >
                                         <div className={`px-3 py-2 flex items-center justify-between gap-3 cursor-pointer ${isVarExpanded ? "bg-slate-50" : "hover:bg-slate-50/50"}`} onClick={() => setExpandedVariant(isVarExpanded ? null : v.id)}>
                                           <div className="flex items-center gap-2 flex-1 min-w-0">
+                                            <svg className="w-3 h-3 text-slate-300 shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                                             <span className={`${chColor} text-white text-[10px] font-semibold px-2 py-0.5 rounded shrink-0`}>{CHANNEL_LABEL[v.channel] ?? v.channel}</span>
                                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${vs.cls}`}>{vs.label}</span>
                                             <span className="text-xs text-slate-600 truncate">{getVariantSummary(v) || "(内容なし)"}</span>
