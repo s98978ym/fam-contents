@@ -6,7 +6,8 @@ import {
   CHANNEL_LABELS,
   CHANNEL_OPTIONS,
   TASTE_OPTIONS,
-  WORD_COUNT_OPTIONS,
+  VOLUME_SLIDER_CONFIG,
+  PROMPT_DESCRIPTIONS,
   StepGenerating,
   StepPreview,
   StepSavePublish,
@@ -159,7 +160,7 @@ export default function FolderDetailPage() {
   // Wizard
   const [wizardFiles, setWizardFiles] = useState<FileEntry[]>([]);
   const [settings, setSettings] = useState<GenerationSettings>({
-    channel: "", customInstructions: "", taste: "scientific", wordCount: "", imageHandling: "none", promptVersionId: "",
+    channel: "", customInstructions: "", taste: "scientific", wordCount: "", volume: 0, imageHandling: "none", promptVersionId: "",
   });
   const [aiAnalysis, setAiAnalysis] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -167,15 +168,17 @@ export default function FolderDetailPage() {
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [promptVersions, setPromptVersions] = useState<{ id: string; name: string; type: string; version: number }[]>([]);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/drive/folders").then((r) => r.json()),
       fetch(`/api/drive/files?folderId=${folderId}`).then((r) => r.json()),
-    ]).then(([folders, files]) => {
+      fetch("/api/prompt-versions").then((r) => r.json()),
+    ]).then(([folders, files, prompts]) => {
       setFolder((folders as DriveFolder[]).find((fd) => fd.id === folderId) ?? null);
       setDriveFiles(files);
+      setPromptVersions(prompts);
       setWizardFiles(driveToWizardFiles(files));
       setLoading(false);
     });
@@ -264,7 +267,6 @@ export default function FolderDetailPage() {
   if (!folder) return <div className="text-center py-16 text-gray-400">フォルダが見つかりません</div>;
 
   const categorized = categorize(driveFiles);
-  const wordCountOpts = WORD_COUNT_OPTIONS[settings.channel] ?? [];
 
   return (
     <div>
@@ -457,57 +459,96 @@ export default function FolderDetailPage() {
                     </div>
                   </div>
 
-                  {/* Word count - if available */}
-                  {wordCountOpts.length > 0 && (
-                    <div>
-                      <h3 className="font-bold text-gray-800 mb-1">ボリューム</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {wordCountOpts.map((w) => (
-                          <button
-                            key={w.value}
-                            type="button"
-                            onClick={() => setSettings({ ...settings, wordCount: w.value })}
-                            className={`px-4 py-2 rounded-full text-sm border transition-all ${
-                              settings.wordCount === w.value ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300 hover:bg-gray-50"
-                            }`}
-                          >
-                            {w.label}
-                          </button>
-                        ))}
+                  {/* Volume slider */}
+                  {(() => {
+                    const sliderCfg = VOLUME_SLIDER_CONFIG[settings.channel];
+                    if (!sliderCfg) return null;
+                    const currentVolume = settings.volume || sliderCfg.default;
+                    const pct = ((currentVolume - sliderCfg.min) / (sliderCfg.max - sliderCfg.min)) * 100;
+                    return (
+                      <div>
+                        <h3 className="font-bold text-gray-800 mb-1">ボリューム</h3>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-gray-400">{sliderCfg.min}{sliderCfg.unit}</span>
+                          <span className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                            {sliderCfg.format(currentVolume)}
+                          </span>
+                          <span className="text-xs text-gray-400">{sliderCfg.max.toLocaleString()}{sliderCfg.unit}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={sliderCfg.min}
+                          max={sliderCfg.max}
+                          step={sliderCfg.step}
+                          value={currentVolume}
+                          onChange={(e) => setSettings({ ...settings, volume: Number(e.target.value) })}
+                          className="w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer accent-blue-600"
+                          style={{ background: `linear-gradient(to right, #2563eb 0%, #2563eb ${pct}%, #e5e7eb ${pct}%, #e5e7eb 100%)` }}
+                        />
+                        <div className="flex justify-between mt-1">
+                          <span className="text-[10px] text-gray-400">コンパクト</span>
+                          <span className="text-[10px] text-gray-400">標準</span>
+                          <span className="text-[10px] text-gray-400">詳細</span>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Advanced settings - collapsible */}
-                  <div>
-                    <button
-                      onClick={() => setShowAdvanced(!showAdvanced)}
-                      className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-                    >
-                      <span className={`transform transition-transform ${showAdvanced ? "rotate-90" : ""}`}>&rsaquo;</span>
+                  <details className="group">
+                    <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       詳細設定（任意）
-                    </button>
-                    {showAdvanced && (
-                      <div className="mt-3 bg-gray-50 rounded-lg p-4 space-y-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">カスタム指示</label>
-                          <textarea
-                            value={settings.customInstructions}
-                            onChange={(e) => setSettings({ ...settings, customInstructions: e.target.value })}
-                            rows={2}
-                            placeholder="AIへの追加指示があれば入力（例: 初心者向けに、免責文を入れて）"
-                            className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">プロンプトバージョン</label>
-                          <p className="text-xs text-gray-400">
-                            <a href="/prompt-versions" className="text-blue-500 underline">プロンプト管理</a> で設定したカスタムプロンプトを使用できます。
-                          </p>
-                        </div>
+                    </summary>
+                    <div className="mt-3 bg-gray-50 rounded-lg p-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">カスタム指示</label>
+                        <textarea
+                          value={settings.customInstructions}
+                          onChange={(e) => setSettings({ ...settings, customInstructions: e.target.value })}
+                          rows={2}
+                          placeholder="AIへの追加指示があれば入力（例: 初心者向けに、免責文を入れて）"
+                          className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full"
+                        />
                       </div>
-                    )}
-                  </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">プロンプトバージョン</label>
+                        <select
+                          value={settings.promptVersionId}
+                          onChange={(e) => setSettings({ ...settings, promptVersionId: e.target.value })}
+                          className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full mb-2"
+                        >
+                          <option value="">デフォルト（推奨）</option>
+                          {promptVersions.filter((p) => p.type === (settings.channel.startsWith("instagram") ? "instagram" : settings.channel === "event_lp" ? "lp" : settings.channel) || p.type === "planner").map((p) => (
+                            <option key={p.id} value={p.id}>{p.name} v{p.version}</option>
+                          ))}
+                        </select>
+                        {(() => {
+                          const pType = settings.channel.startsWith("instagram") ? "instagram" : settings.channel === "event_lp" ? "lp" : settings.channel;
+                          const desc = PROMPT_DESCRIPTIONS[pType];
+                          if (!desc) return null;
+                          return (
+                            <div className="bg-white border border-gray-200 rounded-lg p-3">
+                              <div className="flex items-start gap-2">
+                                <span className="text-xl shrink-0">{desc.icon}</span>
+                                <div>
+                                  <p className="text-xs text-gray-500 leading-relaxed">{desc.description}</p>
+                                  <div className="flex flex-wrap gap-1 mt-1.5">
+                                    {desc.tags.map((tag) => (
+                                      <span key={tag} className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{tag}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        <p className="text-xs text-gray-400 mt-2">
+                          <a href="/prompt-versions" className="text-blue-500 underline">プロンプト管理</a> で設定したカスタムプロンプトを使用できます。
+                        </p>
+                      </div>
+                    </div>
+                  </details>
                 </>
               )}
             </div>
