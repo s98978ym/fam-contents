@@ -15,6 +15,7 @@ interface Variant {
   status: string;
   body?: Record<string, unknown>;
   scheduled_at?: string;
+  assignee?: string;
 }
 
 interface Review {
@@ -271,6 +272,88 @@ function CommentPopover({
 }
 
 // ---------------------------------------------------------------------------
+// Assignee helpers & combobox
+// ---------------------------------------------------------------------------
+
+function loadMembers(): string[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem("registered_members") ?? "[]"); } catch { return []; }
+}
+
+function saveMembers(members: string[]) {
+  localStorage.setItem("registered_members", JSON.stringify(members));
+}
+
+function fuzzyMatch(query: string, target: string): number {
+  const q = query.toLowerCase(), t = target.toLowerCase();
+  if (t.includes(q)) return 2;
+  let qi = 0;
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) { if (t[ti] === q[qi]) qi++; }
+  return qi === q.length ? 1 : 0;
+}
+
+function AssigneeCombobox({ value, members, onChange, onRemoveMember }: {
+  value: string; members: string[];
+  onChange: (val: string) => void; onRemoveMember: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = query
+    ? members.map((m) => ({ name: m, score: fuzzyMatch(query, m) })).filter((m) => m.score > 0).sort((a, b) => b.score - a.score).map((m) => m.name)
+    : members;
+  const showAddNew = query && !members.includes(query) && query.trim().length > 0;
+
+  function select(val: string) { onChange(val); setQuery(""); setOpen(false); }
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setTimeout(() => inputRef.current?.focus(), 0); }}
+        className={`text-xs rounded-md border px-3 py-1.5 outline-none cursor-pointer ${
+          value ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-400"
+        }`}
+      >
+        {value ? `担当: ${value}` : "担当者を設定"}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg w-56 overflow-hidden">
+          <div className="p-1.5 border-b border-gray-100">
+            <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && showAddNew) select(query.trim()); if (e.key === "Escape") setOpen(false); }}
+              placeholder="名前で検索 / 新規入力..." className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded outline-none focus:border-indigo-300" />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {value && <button onClick={() => select("")} className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-gray-50">担当を解除</button>}
+            {filtered.map((m) => (
+              <div key={m} className="flex items-center group">
+                <button onClick={() => select(m)} className={`flex-1 text-left px-3 py-2 text-xs hover:bg-indigo-50 ${m === value ? "text-indigo-700 font-medium bg-indigo-50/50" : "text-gray-700"}`}>{m}</button>
+                <button onClick={(e) => { e.stopPropagation(); onRemoveMember(m); }} className="px-2 py-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title={`${m} を削除`}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            ))}
+            {showAddNew && <button onClick={() => select(query.trim())} className="w-full text-left px-3 py-2 text-xs text-indigo-600 hover:bg-indigo-50 border-t border-gray-100">+ &quot;{query.trim()}&quot; を追加</button>}
+            {filtered.length === 0 && !showAddNew && <div className="px-3 py-3 text-xs text-gray-400 text-center">該当なし</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -295,13 +378,39 @@ export default function VariantDetailPage() {
   const [reviewForm, setReviewForm] = useState({ reviewer: "", role: "supervisor", decision: "approved", comment: "" });
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState("");
+  const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
+
+  useEffect(() => { setRegisteredMembers(loadMembers()); }, []);
+
+  const allMembers = [...new Set([...registeredMembers, ...(variant?.assignee ? [variant.assignee] : [])])].sort();
+
+  function handleAssigneeChange(newAssignee: string) {
+    if (!variant) return;
+    setVariant({ ...variant, assignee: newAssignee || undefined });
+    const overrides = JSON.parse(localStorage.getItem("assignee_overrides") ?? "{}");
+    overrides[variant.id] = newAssignee;
+    localStorage.setItem("assignee_overrides", JSON.stringify(overrides));
+    if (newAssignee && !registeredMembers.includes(newAssignee)) {
+      const next = [...registeredMembers, newAssignee].sort();
+      setRegisteredMembers(next);
+      saveMembers(next);
+    }
+  }
+
+  function handleRemoveMember(name: string) {
+    const next = registeredMembers.filter((m) => m !== name);
+    setRegisteredMembers(next);
+    saveMembers(next);
+  }
 
   useEffect(() => {
     Promise.all([
       fetch("/api/variants").then((r) => r.json()),
       fetch("/api/reviews").then((r) => r.json()),
     ]).then(([variants, revs]) => {
-      const v = (variants as Variant[]).find((x) => x.id === variantId) ?? null;
+      const overrides = JSON.parse(localStorage.getItem("assignee_overrides") ?? "{}") as Record<string, string>;
+      const withAssignees = (variants as Variant[]).map((x) => overrides[x.id] !== undefined ? { ...x, assignee: overrides[x.id] || undefined } : x);
+      const v = withAssignees.find((x) => x.id === variantId) ?? null;
       setVariant(v);
       if (v) setReviews((revs as Review[]).filter((r) => r.content_id === v.content_id));
       setLoading(false);
@@ -397,6 +506,12 @@ export default function VariantDetailPage() {
             <span className={`px-2.5 py-1 text-xs rounded-full font-medium ${st.bg}`}>
               {st.label}
             </span>
+            <AssigneeCombobox
+              value={variant.assignee ?? ""}
+              members={allMembers}
+              onChange={handleAssigneeChange}
+              onRemoveMember={handleRemoveMember}
+            />
           </div>
           <button
             onClick={() => setShowReviewForm(!showReviewForm)}
