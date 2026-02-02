@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { sampleCampaigns, sampleVariants } from "@/lib/sample_data";
-import type { ChannelVariant } from "@/types/content_package";
+import type { ChannelVariant, Campaign } from "@/types/content_package";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -88,10 +88,14 @@ function getVariantSummary(v: { body?: Record<string, unknown> }): string {
 
 interface DotInfo {
   variant: ChannelVariant;
-  campaign: typeof sampleCampaigns[number];
+  campaign: Campaign;
   objective: Objective;
   x: number;
   y: number;
+}
+
+function fmtISO(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
 function DotPopover({ info, onClose }: { info: DotInfo; onClose: () => void }) {
@@ -162,18 +166,173 @@ function IconObj({ obj }: { obj: Objective }) {
 }
 
 // ---------------------------------------------------------------------------
+// NewCampaignForm
+// ---------------------------------------------------------------------------
+
+function NewCampaignForm({ onSave, onCancel }: { onSave: (data: Omit<Campaign, "id">) => void; onCancel: () => void }) {
+  const [name, setName] = useState("");
+  const [objective, setObjective] = useState<Objective>("acquisition");
+  const [startDate, setStartDate] = useState(fmtISO(new Date()));
+  const [endDate, setEndDate] = useState(fmtISO(addDays(new Date(), 30)));
+  const [status, setStatus] = useState<Campaign["status"]>("planning");
+
+  return (
+    <div className="bg-white rounded-xl border border-indigo-200 shadow-sm mb-4 p-4">
+      <h3 className="text-sm font-bold text-slate-700 mb-3">新規キャンペーン</h3>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="col-span-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="キャンペーン名" className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm outline-none focus:border-indigo-300" autoFocus />
+        </div>
+        <div>
+          <label className="text-[10px] text-slate-400 mb-1 block">目的</label>
+          <select value={objective} onChange={(e) => setObjective(e.target.value as Objective)} className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs outline-none">
+            {(Object.entries(OBJECTIVE_CONFIG) as [Objective, typeof OBJECTIVE_CONFIG[Objective]][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-slate-400 mb-1 block">ステータス</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value as Campaign["status"])} className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs outline-none">
+            {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-slate-400 mb-1 block">開始日</label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs outline-none" />
+        </div>
+        <div>
+          <label className="text-[10px] text-slate-400 mb-1 block">終了日</label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs outline-none" />
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="px-3 py-1.5 rounded-md text-xs border border-slate-200 hover:bg-slate-50">キャンセル</button>
+        <button onClick={() => { if (!name.trim()) return; onSave({ name: name.trim(), objective, start_date: startDate, end_date: endDate, status, content_ids: [] }); }} disabled={!name.trim()} className={`px-3 py-1.5 rounded-md text-xs font-medium ${name.trim() ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-slate-100 text-slate-400"}`}>
+          追加
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CampaignEditRow (inline edit in expanded header)
+// ---------------------------------------------------------------------------
+
+function CampaignEditRow({ camp, onSave, onCancel }: { camp: Campaign; onSave: (patch: Partial<Campaign>) => void; onCancel: () => void }) {
+  const [name, setName] = useState(camp.name);
+  const [objective, setObjective] = useState(camp.objective);
+  const [status, setStatus] = useState(camp.status);
+  const [startDate, setStartDate] = useState(camp.start_date);
+  const [endDate, setEndDate] = useState(camp.end_date);
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap flex-1">
+      <input value={name} onChange={(e) => setName(e.target.value)} className="border border-slate-300 rounded px-2 py-1 text-xs w-40 outline-none" />
+      <select value={objective} onChange={(e) => setObjective(e.target.value as Objective)} className="border border-slate-300 rounded px-1.5 py-1 text-[10px] outline-none">
+        {(Object.entries(OBJECTIVE_CONFIG) as [Objective, typeof OBJECTIVE_CONFIG[Objective]][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+      </select>
+      <select value={status} onChange={(e) => setStatus(e.target.value as Campaign["status"])} className="border border-slate-300 rounded px-1.5 py-1 text-[10px] outline-none">
+        {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+      </select>
+      <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border border-slate-300 rounded px-1.5 py-1 text-[10px] outline-none" />
+      <span className="text-[10px] text-slate-400">〜</span>
+      <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border border-slate-300 rounded px-1.5 py-1 text-[10px] outline-none" />
+      <button onClick={() => onSave({ name, objective, status, start_date: startDate, end_date: endDate })} className="px-2 py-1 rounded text-[10px] font-medium bg-indigo-600 text-white hover:bg-indigo-700">保存</button>
+      <button onClick={onCancel} className="px-2 py-1 rounded text-[10px] border border-slate-300 hover:bg-slate-50">取消</button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// VariantLinker (add existing variants to campaign)
+// ---------------------------------------------------------------------------
+
+function VariantLinker({ allVariants, linkedContentIds, onLink }: { allVariants: ChannelVariant[]; linkedContentIds: string[]; onLink: (contentId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const unlinked = allVariants.filter((v) => !linkedContentIds.includes(v.content_id));
+  const uniqueContentIds = [...new Set(unlinked.map((v) => v.content_id))];
+
+  if (uniqueContentIds.length === 0 && !open) return null;
+
+  return (
+    <div>
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">
+          + コンテンツを紐づけ
+        </button>
+      ) : (
+        <div className="border border-slate-200 rounded-lg p-2 bg-slate-50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-semibold text-slate-500">未紐づけコンテンツ</span>
+            <button onClick={() => setOpen(false)} className="text-[10px] text-slate-400 hover:text-slate-600">閉じる</button>
+          </div>
+          {uniqueContentIds.length === 0 ? (
+            <p className="text-[10px] text-slate-400">紐づけ可能なコンテンツがありません</p>
+          ) : (
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {uniqueContentIds.map((cid) => {
+                const sample = unlinked.find((v) => v.content_id === cid)!;
+                const chColor = CHANNEL_COLOR[sample.channel] ?? "bg-slate-500";
+                return (
+                  <button key={cid} onClick={() => { onLink(cid); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white text-left transition-colors">
+                    <span className={`${chColor} text-white text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0`}>{CHANNEL_LABEL[sample.channel] ?? sample.channel}</span>
+                    <span className="text-[10px] text-slate-600 truncate">{getVariantSummary(sample) || cid}</span>
+                    <span className="text-[10px] text-indigo-500 ml-auto shrink-0">+ 追加</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function CampaignsPage() {
-  const [weeks, setWeeks] = useState(2);
+  const [weeks, setWeeks] = useState(4);
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
   const [expandedVariant, setExpandedVariant] = useState<string | null>(null);
   const [dotInfo, setDotInfo] = useState<DotInfo | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() => [...sampleCampaigns]);
   const [variants, setVariants] = useState<ChannelVariant[]>(() => [...sampleVariants]);
   const [assigneeTab, setAssigneeTab] = useState<string>("all");
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
   const dragRef = useRef<{ variantId: string; timelineEl: HTMLElement; startX: number; tsMs: number; spanMs: number } | null>(null);
   const [dragPct, setDragPct] = useState<{ id: string; pct: number } | null>(null);
+
+  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2500); }, []);
+
+  // --- Campaign CRUD ---
+  let nextId = useRef(100);
+  function addCampaign(data: Omit<Campaign, "id">) {
+    nextId.current++;
+    const c: Campaign = { ...data, id: `camp_new_${nextId.current}` };
+    setCampaigns((prev) => [...prev, c]);
+    setShowNewForm(false);
+    showToast("キャンペーンを追加しました");
+    return c;
+  }
+  function updateCampaign(id: string, patch: Partial<Campaign>) {
+    setCampaigns((prev) => prev.map((c) => c.id === id ? { ...c, ...patch } : c));
+  }
+  function deleteCampaign(id: string) {
+    setCampaigns((prev) => prev.filter((c) => c.id !== id));
+    setExpandedCampaign(null);
+    showToast("キャンペーンを削除しました");
+  }
+  function linkVariant(campId: string, contentId: string) {
+    setCampaigns((prev) => prev.map((c) => c.id === campId && !c.content_ids.includes(contentId) ? { ...c, content_ids: [...c.content_ids, contentId] } : c));
+  }
+  function unlinkVariant(campId: string, contentId: string) {
+    setCampaigns((prev) => prev.map((c) => c.id === campId ? { ...c, content_ids: c.content_ids.filter((x) => x !== contentId) } : c));
+  }
 
   const updateVariantDate = useCallback((variantId: string, newDate: Date) => {
     setVariants((prev) =>
@@ -198,14 +357,14 @@ export default function CampaignsPage() {
   }, [timelineStart, weeks, totalDays]);
 
   const grouped = useMemo(() => {
-    const map = new Map<Objective, typeof sampleCampaigns>();
-    for (const c of sampleCampaigns) {
+    const map = new Map<Objective, Campaign[]>();
+    for (const c of campaigns) {
       const obj = c.objective as Objective;
       if (!map.has(obj)) map.set(obj, []);
       map.get(obj)!.push(c);
     }
     return map;
-  }, []);
+  }, [campaigns]);
 
   const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
   useEffect(() => {
@@ -232,7 +391,7 @@ export default function CampaignsPage() {
     return { left: `${(leftMs / spanMs) * 100}%`, width: `${((rightMs - leftMs) / spanMs) * 100}%` };
   }
 
-  function getContentDots(contentIds: string[], campaign: typeof sampleCampaigns[number], objective: Objective) {
+  function getContentDots(contentIds: string[], campaign: Campaign, objective: Objective) {
     const cvariants = getVariantsForCampaign(contentIds)
       .filter((v) => assigneeTab === "all" || v.assignee === assigneeTab);
     const tsMs = timelineStart.getTime();
@@ -244,10 +403,10 @@ export default function CampaignsPage() {
         if (vMs < tsMs || vMs > tsMs + spanMs) return null;
         return { offsetPct: ((vMs - tsMs) / spanMs) * 100, variant: v, campaign, objective };
       })
-      .filter(Boolean) as { offsetPct: number; variant: ChannelVariant; campaign: typeof sampleCampaigns[number]; objective: Objective }[];
+      .filter(Boolean) as { offsetPct: number; variant: ChannelVariant; campaign: Campaign; objective: Objective }[];
   }
 
-  function handleDotClick(e: React.MouseEvent, dot: { variant: ChannelVariant; campaign: typeof sampleCampaigns[number]; objective: Objective }) {
+  function handleDotClick(e: React.MouseEvent, dot: { variant: ChannelVariant; campaign: Campaign; objective: Objective }) {
     if (dragRef.current) return; // ignore click after drag
     e.stopPropagation();
     const rect = (e.target as HTMLElement).getBoundingClientRect();
@@ -297,8 +456,26 @@ export default function CampaignsPage() {
       {/* Popover */}
       {dotInfo && <DotPopover info={dotInfo} onClose={() => setDotInfo(null)} />}
 
-      <h2 className="text-xl font-bold text-slate-800 mb-1">キャンペーン</h2>
-      <p className="text-sm text-slate-400 mb-5">目的別の施策とコンテンツ配信スケジュール</p>
+      {/* Toast */}
+      {toast && <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm">{toast}</div>}
+
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 mb-1">キャンペーン</h2>
+          <p className="text-sm text-slate-400">目的別の施策とコンテンツ配信スケジュール</p>
+        </div>
+        <button onClick={() => setShowNewForm(true)} className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+          + 新規キャンペーン
+        </button>
+      </div>
+
+      {/* New campaign form */}
+      {showNewForm && (
+        <NewCampaignForm
+          onSave={(data) => addCampaign(data)}
+          onCancel={() => setShowNewForm(false)}
+        />
+      )}
 
       {/* ----------------------------------------------------------------- */}
       {/* Timeline                                                           */}
@@ -450,40 +627,57 @@ export default function CampaignsPage() {
                         </div>
                         {/* Expanded detail panel */}
                         {isActive && (
-                          <div className="ml-6 mr-2 my-1 rounded-lg border border-slate-200 bg-white overflow-hidden">
-                            <div className={`px-4 py-2 ${cfg.bg} border-b ${cfg.border} flex items-center gap-3`}>
-                              <span className="text-xs font-semibold text-slate-700">{camp.name}</span>
-                              <span className={`px-2 py-0.5 text-[10px] rounded-full font-semibold ${st.cls}`}>{st.label}</span>
-                              <span className="text-[10px] text-slate-400 tabular-nums">{camp.start_date} — {camp.end_date}</span>
-                              <span className="text-[10px] text-slate-400">{campVariants.length} コンテンツ</span>
+                          <div className="ml-6 mr-2 my-1 rounded-lg border border-slate-200 bg-white overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                            {/* Header with edit/delete */}
+                            <div className={`px-4 py-2 ${cfg.bg} border-b ${cfg.border} flex items-center justify-between`}>
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                {editingCampaign === camp.id ? (
+                                  <CampaignEditRow camp={camp} onSave={(patch) => { updateCampaign(camp.id, patch); setEditingCampaign(null); showToast("更新しました"); }} onCancel={() => setEditingCampaign(null)} />
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-semibold text-slate-700">{camp.name}</span>
+                                    <span className={`px-2 py-0.5 text-[10px] rounded-full font-semibold ${st.cls}`}>{st.label}</span>
+                                    <span className="text-[10px] text-slate-400 tabular-nums">{camp.start_date} — {camp.end_date}</span>
+                                  </>
+                                )}
+                              </div>
+                              {editingCampaign !== camp.id && (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={() => setEditingCampaign(camp.id)} className="p-1 rounded hover:bg-white/60 text-slate-500" title="編集">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                  </button>
+                                  <button onClick={() => { if (confirm(`「${camp.name}」を削除しますか？`)) deleteCampaign(camp.id); }} className="p-1 rounded hover:bg-red-100 text-red-400 hover:text-red-600" title="削除">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                             <div className="p-3">
+                              {/* Linked variants */}
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">コンテンツ ({campVariants.length})</span>
+                              </div>
                               {campVariants.length === 0 ? (
-                                <p className="text-xs text-slate-400 py-2">登録されたコンテンツはありません</p>
+                                <p className="text-xs text-slate-400 py-1">紐づけられたコンテンツはありません</p>
                               ) : (
-                                <div className="space-y-1.5">
+                                <div className="space-y-1.5 mb-3">
                                   {campVariants.map((v) => {
                                     const vs = VARIANT_STATUS[v.status] ?? VARIANT_STATUS.draft;
                                     const chColor = CHANNEL_COLOR[v.channel] ?? "bg-slate-500";
                                     const isVarExpanded = expandedVariant === v.id;
                                     return (
                                       <div key={v.id} className={`rounded-lg border transition-all overflow-hidden ${isVarExpanded ? "border-slate-300 shadow-sm" : "border-slate-100 hover:border-slate-200"}`}>
-                                        <div
-                                          className={`px-3 py-2 flex items-center justify-between gap-3 cursor-pointer ${isVarExpanded ? "bg-slate-50" : "hover:bg-slate-50/50"}`}
-                                          onClick={(e) => { e.stopPropagation(); setExpandedVariant(isVarExpanded ? null : v.id); }}
-                                        >
+                                        <div className={`px-3 py-2 flex items-center justify-between gap-3 cursor-pointer ${isVarExpanded ? "bg-slate-50" : "hover:bg-slate-50/50"}`} onClick={() => setExpandedVariant(isVarExpanded ? null : v.id)}>
                                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                                            <span className={`${chColor} text-white text-[10px] font-semibold px-2 py-0.5 rounded shrink-0`}>
-                                              {CHANNEL_LABEL[v.channel] ?? v.channel}
-                                            </span>
+                                            <span className={`${chColor} text-white text-[10px] font-semibold px-2 py-0.5 rounded shrink-0`}>{CHANNEL_LABEL[v.channel] ?? v.channel}</span>
                                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${vs.cls}`}>{vs.label}</span>
                                             <span className="text-xs text-slate-600 truncate">{getVariantSummary(v) || "(内容なし)"}</span>
                                           </div>
-                                          <div className="flex items-center gap-2 shrink-0">
+                                          <div className="flex items-center gap-1.5 shrink-0">
                                             {v.scheduled_at && <span className="text-[10px] text-slate-400 tabular-nums">{new Date(v.scheduled_at).toLocaleDateString("ja-JP")}</span>}
-                                            <svg className={`w-3 h-3 text-slate-300 transition-transform ${isVarExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
+                                            <button onClick={(e) => { e.stopPropagation(); unlinkVariant(camp.id, v.content_id); }} className="p-0.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500" title="紐づけ解除">
+                                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
                                           </div>
                                         </div>
                                         {isVarExpanded && v.body && (
@@ -492,12 +686,7 @@ export default function CampaignsPage() {
                                               {Object.entries(v.body).map(([key, val]) => {
                                                 if (val == null) return null;
                                                 const display = Array.isArray(val) ? val.join(", ") : String(val);
-                                                return (
-                                                  <div key={key} className="flex gap-3 text-xs">
-                                                    <span className="text-slate-400 shrink-0 w-24 text-right font-mono">{key}</span>
-                                                    <span className="text-slate-700 whitespace-pre-wrap">{display}</span>
-                                                  </div>
-                                                );
+                                                return (<div key={key} className="flex gap-3 text-xs"><span className="text-slate-400 shrink-0 w-24 text-right font-mono">{key}</span><span className="text-slate-700 whitespace-pre-wrap">{display}</span></div>);
                                               })}
                                             </div>
                                           </div>
@@ -507,6 +696,12 @@ export default function CampaignsPage() {
                                   })}
                                 </div>
                               )}
+                              {/* Add variant */}
+                              <VariantLinker
+                                allVariants={variants}
+                                linkedContentIds={camp.content_ids}
+                                onLink={(contentId) => linkVariant(camp.id, contentId)}
+                              />
                             </div>
                           </div>
                         )}
