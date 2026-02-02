@@ -16,6 +16,12 @@ interface Variant {
   scheduled_at?: string;
 }
 
+interface Review {
+  id: string;
+  content_id: string;
+  decision: string;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -48,14 +54,24 @@ function getContentSummary(v: Variant): string {
 // Page
 // ---------------------------------------------------------------------------
 
+function getCommentCount(variantId: string): number {
+  if (typeof window === "undefined") return 0;
+  try { return JSON.parse(localStorage.getItem(`comments_${variantId}`) ?? "[]").length; } catch { return 0; }
+}
+
 export default function ContentsListPage() {
   const [variants, setVariants] = useState<Variant[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
 
   useEffect(() => {
-    fetch("/api/variants").then((r) => r.json()).then((v) => {
+    Promise.all([
+      fetch("/api/variants").then((r) => r.json()),
+      fetch("/api/reviews").then((r) => r.json()),
+    ]).then(([v, r]) => {
       setVariants(v);
+      setReviews(r);
       setLoading(false);
     });
   }, []);
@@ -110,6 +126,10 @@ export default function ContentsListPage() {
         <div className="space-y-2">
           {filtered.map((v) => {
             const st = STATUS_STYLE[v.status] ?? STATUS_STYLE.draft;
+            const commentCount = getCommentCount(v.id);
+            const variantReviews = reviews.filter((r) => r.content_id === v.content_id);
+            const approvedCount = variantReviews.filter((r) => r.decision === "approved").length;
+            const revisionCount = variantReviews.filter((r) => r.decision === "revision_requested" || r.decision === "rejected").length;
             return (
               <Link
                 key={v.id}
@@ -130,9 +150,29 @@ export default function ContentsListPage() {
                     <p className="text-sm text-gray-800 font-medium truncate">
                       {getContentSummary(v) || "(内容なし)"}
                     </p>
-                    {v.scheduled_at && (
-                      <p className="text-xs text-gray-400 mt-1">配信予定: {v.scheduled_at}</p>
-                    )}
+                    <div className="flex items-center gap-3 mt-1.5">
+                      {v.scheduled_at && (
+                        <span className="text-xs text-gray-400">配信予定: {v.scheduled_at}</span>
+                      )}
+                      {commentCount > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-yellow-100 text-yellow-700">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
+                          {commentCount}
+                        </span>
+                      )}
+                      {approvedCount > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-green-100 text-green-700">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          承認 {approvedCount}
+                        </span>
+                      )}
+                      {revisionCount > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-red-100 text-red-700">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          修正 {revisionCount}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <svg className="w-5 h-5 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </div>

@@ -279,8 +279,16 @@ export default function VariantDetailPage() {
   const [variant, setVariant] = useState<Variant | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [inlineComments, setInlineComments] = useState<InlineComment[]>([]);
+  const [inlineComments, setInlineComments] = useState<InlineComment[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(`comments_${variantId}`) ?? "[]"); } catch { return []; }
+  });
   const [commentPopover, setCommentPopover] = useState<{ fieldKey: string; selectedText: string; position: { top: number; left: number } } | null>(null);
+
+  // Persist inline comments to localStorage
+  useEffect(() => {
+    localStorage.setItem(`comments_${variantId}`, JSON.stringify(inlineComments));
+  }, [inlineComments, variantId]);
 
   // Overall review
   const [showReviewForm, setShowReviewForm] = useState(false);
