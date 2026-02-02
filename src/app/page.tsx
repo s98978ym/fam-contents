@@ -1,12 +1,37 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
 import { sampleCampaigns, sampleContents, sampleMetrics, samplePublishJobs } from "@/lib/sample_data";
+import type { Campaign } from "@/types/content_package";
+
+const OBJECTIVE_OPTIONS: { value: Campaign["objective"]; label: string }[] = [
+  { value: "acquisition", label: "新規獲得" },
+  { value: "retention", label: "リテンション" },
+  { value: "trust", label: "信頼構築" },
+  { value: "recruitment", label: "採用" },
+  { value: "event", label: "イベント" },
+];
+
+const STATUS_OPTIONS: { value: Campaign["status"]; label: string; cls: string }[] = [
+  { value: "planning", label: "planning", cls: "bg-yellow-100 text-yellow-700" },
+  { value: "active", label: "active", cls: "bg-green-100 text-green-700" },
+  { value: "completed", label: "completed", cls: "bg-blue-100 text-blue-700" },
+];
 
 export default function DashboardPage() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() => [...sampleCampaigns]);
+
   const stats = [
-    { label: "キャンペーン", value: sampleCampaigns.length },
+    { label: "キャンペーン", value: campaigns.length },
     { label: "コンテンツ", value: sampleContents.length },
     { label: "配信待ち", value: samplePublishJobs.filter((j) => j.status === "queued").length },
     { label: "今日のインプレッション", value: sampleMetrics.reduce((a, m) => a + m.impressions, 0).toLocaleString() },
   ];
+
+  function updateCampaign(id: string, patch: Partial<Campaign>) {
+    setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
 
   return (
     <div>
@@ -35,19 +60,61 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {sampleCampaigns.map((c) => (
-                <tr key={c.id} className="border-t border-gray-100">
-                  <td className="px-4 py-2 font-mono text-xs">{c.id}</td>
-                  <td className="px-4 py-2">{c.name}</td>
-                  <td className="px-4 py-2">{c.objective}</td>
-                  <td className="px-4 py-2">{c.start_date} ~ {c.end_date}</td>
-                  <td className="px-4 py-2">
-                    <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
-                      {c.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {campaigns.map((c) => {
+                const st = STATUS_OPTIONS.find((s) => s.value === c.status) ?? STATUS_OPTIONS[0];
+                return (
+                  <tr key={c.id} className="border-t border-gray-100">
+                    <td className="px-4 py-2 font-mono text-xs">{c.id}</td>
+                    <td className="px-4 py-2">
+                      <Link
+                        href="/campaigns"
+                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                      >
+                        {c.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2">
+                      <select
+                        value={c.objective}
+                        onChange={(e) => updateCampaign(c.id, { objective: e.target.value as Campaign["objective"] })}
+                        className="border border-gray-200 rounded px-2 py-1 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none"
+                      >
+                        {OBJECTIVE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="date"
+                          value={c.start_date}
+                          onChange={(e) => updateCampaign(c.id, { start_date: e.target.value })}
+                          className="border border-gray-200 rounded px-2 py-1 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none"
+                        />
+                        <span className="text-gray-400">~</span>
+                        <input
+                          type="date"
+                          value={c.end_date}
+                          onChange={(e) => updateCampaign(c.id, { end_date: e.target.value })}
+                          className="border border-gray-200 rounded px-2 py-1 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none"
+                        />
+                      </div>
+                    </td>
+                    <td className="px-4 py-2">
+                      <select
+                        value={c.status}
+                        onChange={(e) => updateCampaign(c.id, { status: e.target.value as Campaign["status"] })}
+                        className={`rounded-full px-3 py-1 text-xs font-medium border-0 outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer ${st.cls}`}
+                      >
+                        {STATUS_OPTIONS.map((s) => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
