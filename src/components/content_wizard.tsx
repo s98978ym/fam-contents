@@ -37,7 +37,7 @@ export interface PreviewData {
   generatedContent: Record<string, unknown>;
   files: FileEntry[];
   settings: GenerationSettings;
-  aiAnalysis: string;
+  aiAnalysis: { steps: { label: string; icon: string; status: string; detail: string }[]; direction: string } | null;
 }
 
 export interface CategorizedFiles {
@@ -357,8 +357,8 @@ export function StepRequirements({
   settings: GenerationSettings;
   setSettings: (s: GenerationSettings) => void;
   promptVersions: { id: string; name: string; type: string; version: number }[];
-  aiAnalysis: string;
-  setAiAnalysis: (a: string) => void;
+  aiAnalysis: { steps: { label: string; icon: string; status: string; detail: string }[]; direction: string } | null;
+  setAiAnalysis: (a: { steps: { label: string; icon: string; status: string; detail: string }[]; direction: string } | null) => void;
   onAnalyze: () => void;
   analyzing: boolean;
   onTogglePhotoSelect?: (fileId: string) => void;
@@ -388,14 +388,25 @@ export function StepRequirements({
           {files.length === 0 && <span className="text-xs text-orange-500 self-center">先にStep 1でファイルを登録してください</span>}
         </div>
         {aiAnalysis && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-            <Textarea
-              value={aiAnalysis}
-              onChange={(e) => setAiAnalysis(e.target.value)}
-              rows={6}
-              className="bg-white border-indigo-200"
-            />
-            <p className="text-xs text-indigo-400 mt-2">分析結果を手動で編集できます。</p>
+          <div className="space-y-2">
+            {aiAnalysis.steps.map((s, i) => (
+              <div key={i} className={`rounded-lg border p-3 ${s.status === "done" ? "border-green-200 bg-green-50/50" : "border-gray-200 bg-gray-50"}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span>{s.icon}</span>
+                  <span className="text-sm font-semibold text-gray-800">Step {i + 1}: {s.label}</span>
+                  {s.status === "done" ? (
+                    <span className="ml-auto text-xs font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded-full">完了</span>
+                  ) : (
+                    <span className="ml-auto text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">スキップ</span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-600 leading-relaxed">{s.detail}</p>
+              </div>
+            ))}
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+              <p className="text-xs font-semibold text-amber-800 mb-1">📌 コンテンツ方向性</p>
+              <p className="text-xs text-amber-900 leading-relaxed">{aiAnalysis.direction}</p>
+            </div>
           </div>
         )}
         {!aiAnalysis && (
@@ -691,9 +702,9 @@ export function StepPreview({
 
       {/* AI Analysis summary */}
       {preview.aiAnalysis && (
-        <div className="bg-indigo-50 rounded-md p-4">
-          <span className="text-xs font-bold text-indigo-600 uppercase">AI分析サマリー</span>
-          <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{preview.aiAnalysis}</p>
+        <div className="bg-amber-50/60 border border-amber-200 rounded-md p-4">
+          <span className="text-xs font-bold text-amber-700 uppercase">AI分析サマリー</span>
+          <p className="text-sm text-amber-900 mt-1 leading-relaxed">{preview.aiAnalysis.direction}</p>
         </div>
       )}
 

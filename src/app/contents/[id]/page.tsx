@@ -83,16 +83,92 @@ function driveToWizardFiles(files: DriveFile[]): FileEntry[] {
   }));
 }
 
-function generateMockAnalysis(files: DriveFile[]): string {
+interface AnalysisStep {
+  label: string;
+  icon: string;
+  status: "done" | "skipped";
+  detail: string;
+}
+
+interface AnalysisResult {
+  steps: AnalysisStep[];
+  direction: string;
+}
+
+function generateMockAnalysis(files: DriveFile[]): AnalysisResult {
   const cats = categorize(files);
-  const lines: string[] = [];
-  lines.push(`${files.length}件のファイルを分析しました。\n`);
-  if (cats.minutes.length > 0) lines.push(`議事録 ${cats.minutes.length}件から、スポーツ栄養に関する企画内容を検出しました。`);
-  if (cats.transcripts.length > 0) lines.push(`トランスクリプト ${cats.transcripts.length}件の文字起こしデータを確認しました。`);
-  if (cats.photos.length > 0) lines.push(`写真 ${cats.photos.length}件をビジュアル素材として使用できます。`);
-  if (cats.others.length > 0) lines.push(`その他 ${cats.others.length}件を参考資料として使用します。`);
-  lines.push("\nおすすめ: Instagram Reels、note記事、LINE配信の組み合わせが効果的です。");
-  return lines.join("\n");
+  const steps: AnalysisStep[] = [];
+
+  // Step 1: 議事録で全体把握
+  if (cats.minutes.length > 0) {
+    steps.push({
+      label: "議事録で全体把握",
+      icon: "📄",
+      status: "done",
+      detail: `議事録 ${cats.minutes.length}件（${cats.minutes.map(f => f.name).join("、")}）を分析。スポーツ栄養に関する企画会議の内容を把握しました。主なテーマ: 試合前の栄養戦略、ターゲット層は学生アスリート・保護者、信頼性のある情報発信を重視。`,
+    });
+  } else {
+    steps.push({
+      label: "議事録で全体把握",
+      icon: "📄",
+      status: "skipped",
+      detail: "議事録が見つかりませんでした。他の素材から方向性を推定します。",
+    });
+  }
+
+  // Step 2: トランスクリプトで詳細把握
+  if (cats.transcripts.length > 0) {
+    steps.push({
+      label: "トランスクリプトで詳細把握",
+      icon: "🎤",
+      status: "done",
+      detail: `トランスクリプト ${cats.transcripts.length}件を精読。具体的な発言内容から、「カーボローディング」「試合72時間前」などのキーフレーズを抽出。専門家の口調やニュアンスを把握し、コンテンツのトーンに反映します。`,
+    });
+  } else {
+    steps.push({
+      label: "トランスクリプトで詳細把握",
+      icon: "🎤",
+      status: "skipped",
+      detail: "トランスクリプトなし。議事録の情報をベースに進めます。",
+    });
+  }
+
+  // Step 3: 写真の活用判断
+  if (cats.photos.length > 0) {
+    const photoNames = cats.photos.map(f => f.name).join("、");
+    steps.push({
+      label: "写真の素材・文脈強化判断",
+      icon: "🖼",
+      status: "done",
+      detail: `写真 ${cats.photos.length}件（${photoNames}）を確認。素材としてサムネイル・カルーセルに使用可能。また、現場の雰囲気を伝える文脈強化素材としてIG Stories・Reelsの背景にも活用できます。`,
+    });
+  } else {
+    steps.push({
+      label: "写真の素材・文脈強化判断",
+      icon: "🖼",
+      status: "skipped",
+      detail: "写真素材なし。AIが生成するテキストベースのビジュアル指示で代替します。",
+    });
+  }
+
+  // Direction
+  const hasMinutes = cats.minutes.length > 0;
+  const hasTranscripts = cats.transcripts.length > 0;
+  const hasPhotos = cats.photos.length > 0;
+  let direction: string;
+  if (hasMinutes && hasTranscripts && hasPhotos) {
+    direction = "議事録の企画意図 × トランスクリプトの専門的知見 × 写真素材を組み合わせ、信頼性と視覚的訴求力の高いコンテンツを生成します。おすすめ: Instagram Reels、note記事、LINE配信の組み合わせが効果的です。";
+  } else if (hasMinutes && hasTranscripts) {
+    direction = "議事録とトランスクリプトから得た深い知見をベースに、テキスト重視のコンテンツを生成します。おすすめ: note記事、LINE配信が特に効果的です。";
+  } else if (hasMinutes && hasPhotos) {
+    direction = "議事録の企画方針に写真素材を組み合わせ、ビジュアル訴求力のあるコンテンツを生成します。おすすめ: Instagram Reels・Feed、イベントLPが効果的です。";
+  } else if (hasMinutes) {
+    direction = "議事録の企画内容をベースにコンテンツの方向性を決定します。おすすめ: 全チャネルでの展開が可能です。";
+  } else {
+    direction = "利用可能な素材からコンテンツの方向性を推定します。より精度の高い生成のために議事録の追加をおすすめします。";
+  }
+
+  return { steps, direction };
 }
 
 function generateMockContent(channel: string): Record<string, unknown> {
@@ -162,7 +238,7 @@ export default function FolderDetailPage() {
   const [settings, setSettings] = useState<GenerationSettings>({
     channel: "", customInstructions: "", taste: "scientific", wordCount: "", volume: 0, imageHandling: "none", promptVersionId: "",
   });
-  const [aiAnalysis, setAiAnalysis] = useState("");
+  const [aiAnalysis, setAiAnalysis] = useState<AnalysisResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState<PreviewData | null>(null);
@@ -359,8 +435,25 @@ export default function FolderDetailPage() {
                   </button>
 
                   {aiAnalysis && (
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4 text-sm text-gray-700 whitespace-pre-wrap">
-                      {aiAnalysis}
+                    <div className="mt-4 space-y-3">
+                      {aiAnalysis.steps.map((s, i) => (
+                        <div key={i} className={`rounded-lg border p-3 ${s.status === "done" ? "border-green-200 bg-green-50/50" : "border-gray-200 bg-gray-50"}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-base">{s.icon}</span>
+                            <span className="text-sm font-semibold text-gray-800">Step {i + 1}: {s.label}</span>
+                            {s.status === "done" ? (
+                              <span className="ml-auto text-xs font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded-full">完了</span>
+                            ) : (
+                              <span className="ml-auto text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">スキップ</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-600 leading-relaxed">{s.detail}</p>
+                        </div>
+                      ))}
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                        <p className="text-xs font-semibold text-amber-800 mb-1">📌 コンテンツ方向性</p>
+                        <p className="text-xs text-amber-900 leading-relaxed">{aiAnalysis.direction}</p>
+                      </div>
                     </div>
                   )}
                 </>
@@ -404,8 +497,9 @@ export default function FolderDetailPage() {
             <div className="space-y-6">
               {/* AI analysis summary (read-only, from step 1) */}
               {aiAnalysis && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 whitespace-pre-wrap">
-                  {aiAnalysis}
+                <div className="bg-amber-50/60 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-1">📌 コンテンツ方向性</p>
+                  <p className="text-xs text-amber-900 leading-relaxed">{aiAnalysis.direction}</p>
                 </div>
               )}
 
