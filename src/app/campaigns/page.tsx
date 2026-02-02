@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { sampleCampaigns, sampleVariants } from "@/lib/sample_data";
+import type { ChannelVariant } from "@/types/content_package";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -86,7 +87,7 @@ function getVariantSummary(v: { body?: Record<string, unknown> }): string {
 // ---------------------------------------------------------------------------
 
 interface DotInfo {
-  variant: typeof sampleVariants[number];
+  variant: ChannelVariant;
   campaign: typeof sampleCampaigns[number];
   objective: Objective;
   x: number;
@@ -169,6 +170,17 @@ export default function CampaignsPage() {
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
   const [expandedVariant, setExpandedVariant] = useState<string | null>(null);
   const [dotInfo, setDotInfo] = useState<DotInfo | null>(null);
+  const [variants, setVariants] = useState<ChannelVariant[]>(() => [...sampleVariants]);
+  const dragRef = useRef<{ variantId: string; timelineEl: HTMLElement; startX: number; tsMs: number; spanMs: number } | null>(null);
+  const [dragPct, setDragPct] = useState<{ id: string; pct: number } | null>(null);
+
+  const updateVariantDate = useCallback((variantId: string, newDate: Date) => {
+    setVariants((prev) =>
+      prev.map((v) =>
+        v.id === variantId ? { ...v, scheduled_at: newDate.toISOString() } : v
+      )
+    );
+  }, []);
 
   const today = useMemo(() => new Date(), []);
   const timelineStart = useMemo(() => startOfWeek(today), [today]);
@@ -195,7 +207,7 @@ export default function CampaignsPage() {
   }, []);
 
   function getVariantsForCampaign(contentIds: string[]) {
-    return sampleVariants.filter((v) => contentIds.includes(v.content_id));
+    return variants.filter((v) => contentIds.includes(v.content_id));
   }
 
   function getBarStyle(startDate: string, endDate: string) {
@@ -211,23 +223,56 @@ export default function CampaignsPage() {
   }
 
   function getContentDots(contentIds: string[], campaign: typeof sampleCampaigns[number], objective: Objective) {
-    const variants = getVariantsForCampaign(contentIds);
+    const cvariants = getVariantsForCampaign(contentIds);
     const tsMs = timelineStart.getTime();
     const spanMs = timelineEnd.getTime() - tsMs;
-    return variants
+    return cvariants
       .filter((v) => v.scheduled_at)
       .map((v) => {
         const vMs = new Date(v.scheduled_at!).getTime();
         if (vMs < tsMs || vMs > tsMs + spanMs) return null;
         return { offsetPct: ((vMs - tsMs) / spanMs) * 100, variant: v, campaign, objective };
       })
-      .filter(Boolean) as { offsetPct: number; variant: typeof sampleVariants[number]; campaign: typeof sampleCampaigns[number]; objective: Objective }[];
+      .filter(Boolean) as { offsetPct: number; variant: ChannelVariant; campaign: typeof sampleCampaigns[number]; objective: Objective }[];
   }
 
-  function handleDotClick(e: React.MouseEvent, dot: { variant: typeof sampleVariants[number]; campaign: typeof sampleCampaigns[number]; objective: Objective }) {
+  function handleDotClick(e: React.MouseEvent, dot: { variant: ChannelVariant; campaign: typeof sampleCampaigns[number]; objective: Objective }) {
+    if (dragRef.current) return; // ignore click after drag
     e.stopPropagation();
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     setDotInfo({ variant: dot.variant, campaign: dot.campaign, objective: dot.objective, x: rect.left + rect.width / 2, y: rect.bottom });
+  }
+
+  function handleDotDragStart(e: React.MouseEvent, variantId: string, timelineEl: HTMLElement) {
+    e.stopPropagation();
+    e.preventDefault();
+    const tsMs = timelineStart.getTime();
+    const spanMs = timelineEnd.getTime() - tsMs;
+    dragRef.current = { variantId, timelineEl, startX: e.clientX, tsMs, spanMs };
+    setDotInfo(null);
+
+    function onMove(ev: MouseEvent) {
+      if (!dragRef.current) return;
+      const rect = dragRef.current.timelineEl.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
+      setDragPct({ id: variantId, pct });
+    }
+
+    function onUp(ev: MouseEvent) {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (!dragRef.current) return;
+      const rect = dragRef.current.timelineEl.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
+      const newMs = dragRef.current.tsMs + (pct / 100) * dragRef.current.spanMs;
+      updateVariantDate(variantId, new Date(newMs));
+      setDragPct(null);
+      // Small delay so click handler doesn't fire
+      setTimeout(() => { dragRef.current = null; }, 50);
+    }
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
   }
 
   const todayPct = useMemo(() => {
@@ -330,7 +375,7 @@ export default function CampaignsPage() {
                             {camp.name}
                           </span>
                         </div>
-                        <div className="flex-1 relative h-7">
+                        <div className="flex-1 relative h-7" ref={(el) => { if (el) el.dataset.timeline = "1"; }}>
                           {/* Today vertical line */}
                           {todayPct >= 0 && todayPct <= 100 && (
                             <div className="absolute top-0 bottom-0 w-px bg-red-500/10" style={{ left: `${todayPct}%` }} />
@@ -343,17 +388,25 @@ export default function CampaignsPage() {
                             />
                           )}
                           {/* Dots */}
-                          {dots.map((dot, di) => (
-                            <button
-                              key={di}
-                              className={`absolute top-1 w-5 h-5 rounded-full -translate-x-2.5 z-10 flex items-center justify-center transition-all ring-2 ring-white hover:ring-4 hover:scale-125 ${cfg.dot} shadow-sm`}
-                              style={{ left: `${dot.offsetPct}%` }}
-                              onClick={(e) => handleDotClick(e, dot)}
-                              title={`${CHANNEL_LABEL[dot.variant.channel] ?? dot.variant.channel}`}
-                            >
-                              <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                            </button>
-                          ))}
+                          {dots.map((dot, di) => {
+                            const isDragging = dragPct?.id === dot.variant.id;
+                            const leftPct = isDragging ? dragPct.pct : dot.offsetPct;
+                            return (
+                              <button
+                                key={di}
+                                className={`absolute top-1 w-5 h-5 rounded-full -translate-x-2.5 z-10 flex items-center justify-center transition-all ring-2 ring-white hover:ring-4 hover:scale-125 ${cfg.dot} shadow-sm ${isDragging ? "scale-150 ring-4 cursor-grabbing" : "cursor-grab"}`}
+                                style={{ left: `${leftPct}%` }}
+                                onClick={(e) => handleDotClick(e, dot)}
+                                onMouseDown={(e) => {
+                                  const timelineEl = (e.currentTarget.parentElement as HTMLElement);
+                                  handleDotDragStart(e, dot.variant.id, timelineEl);
+                                }}
+                                title={`${CHANNEL_LABEL[dot.variant.channel] ?? dot.variant.channel} - ドラッグで日程変更`}
+                              >
+                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     );

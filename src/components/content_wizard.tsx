@@ -658,6 +658,73 @@ function ChannelPreviewRenderer({ channel, content, onUpdate }: { channel: strin
   return <pre className="text-xs font-mono whitespace-pre-wrap">{JSON.stringify(content, null, 2)}</pre>;
 }
 
+// ---------------------------------------------------------------------------
+// Device frames for realistic previews
+// ---------------------------------------------------------------------------
+
+function PhoneFrame({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`mx-auto w-[320px] ${className ?? ""}`}>
+      <div className="bg-black rounded-[2.5rem] p-2 shadow-2xl">
+        <div className="bg-black rounded-[2rem] overflow-hidden relative">
+          {/* Notch */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-b-2xl z-20" />
+          {/* Screen */}
+          <div className="bg-white rounded-[2rem] overflow-hidden min-h-[560px] relative">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrowserFrame({ children, url }: { children: React.ReactNode; url?: string }) {
+  return (
+    <div className="mx-auto max-w-2xl">
+      <div className="bg-slate-200 rounded-t-xl px-4 py-2 flex items-center gap-2">
+        <div className="flex gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-red-400" />
+          <div className="w-3 h-3 rounded-full bg-yellow-400" />
+          <div className="w-3 h-3 rounded-full bg-green-400" />
+        </div>
+        <div className="flex-1 bg-white rounded-md px-3 py-1 text-xs text-slate-400 truncate ml-2">
+          {url ?? "https://example.com"}
+        </div>
+      </div>
+      <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl overflow-hidden min-h-[400px]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function LineChatFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-auto w-[320px]">
+      <div className="bg-black rounded-[2.5rem] p-2 shadow-2xl">
+        <div className="bg-black rounded-[2rem] overflow-hidden relative">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-b-2xl z-20" />
+          <div className="bg-[#7494C0] rounded-[2rem] overflow-hidden min-h-[560px] flex flex-col">
+            {/* LINE header */}
+            <div className="bg-[#4A6E8A] px-4 pt-8 pb-3 flex items-center gap-3">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              <div className="flex-1 text-center">
+                <span className="text-white text-sm font-bold">FAM公式</span>
+              </div>
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </div>
+            {/* Chat area */}
+            <div className="flex-1 px-3 py-4 space-y-3">
+              {children}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-4">
@@ -704,79 +771,228 @@ function EditableTags({ tags, fieldKey, onUpdate }: { tags: string[]; fieldKey: 
 
 function ReelsPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   return (
-    <div className="space-y-3">
-      <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-4">
-        <div className="grid grid-cols-5 gap-2 text-center">
-          {["Hook (3秒)", "課題 (10秒)", "エビデンス (20秒)", "実践 (15秒)", "CTA (7秒)"].map((s, i) => (
-            <div key={i} className={`p-2 rounded text-xs ${i === 0 ? "bg-pink-200" : "bg-white"}`}>{s}</div>
-          ))}
+    <div className="flex gap-8 items-start">
+      {/* Phone mockup */}
+      <PhoneFrame>
+        <div className="relative min-h-[560px] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+          {/* Placeholder video area */}
+          <div className="flex-1 flex items-center justify-center relative">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
+            <div className="text-center px-6 z-10">
+              <div className="w-16 h-16 rounded-full bg-white/10 backdrop-blur flex items-center justify-center mx-auto mb-3">
+                <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              </div>
+              <p className="text-white/60 text-xs">動画プレビュー</p>
+            </div>
+          </div>
+          {/* Bottom overlay - caption area */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+            <div className="flex items-end gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">F</div>
+                  <span className="text-white text-xs font-bold">fam_official</span>
+                </div>
+                <EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} className="!text-white !text-xs leading-relaxed" />
+                {Array.isArray(content.hashtags) && (
+                  <p className="text-blue-300 text-[10px] mt-1">{(content.hashtags as string[]).map(t => `#${t}`).join(" ")}</p>
+                )}
+              </div>
+              {/* Side icons */}
+              <div className="flex flex-col items-center gap-4 shrink-0">
+                {[{icon: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z", n: "1.2K"},
+                  {icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", n: "84"},
+                  {icon: "M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z", n: "67"}
+                ].map((item, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={item.icon} /></svg>
+                    <span className="text-white text-[9px] mt-0.5">{item.n}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-      <Section title="Hook"><EditableText text={content.hook} fieldKey="hook" onUpdate={onUpdate} /></Section>
-      <Section title="課題"><EditableText text={content.problem} fieldKey="problem" onUpdate={onUpdate} /></Section>
-      <Section title="エビデンス"><EditableText text={content.evidence} fieldKey="evidence" onUpdate={onUpdate} /></Section>
-      <Section title="引用元"><EditableText text={content.evidence_source} fieldKey="evidence_source" onUpdate={onUpdate} /></Section>
-      <Section title="実践"><EditableText text={content.practice} fieldKey="practice" onUpdate={onUpdate} /></Section>
-      <Section title="CTA"><EditableText text={content.cta} fieldKey="cta" onUpdate={onUpdate} /></Section>
-      <div className="border-t pt-3">
+      </PhoneFrame>
+
+      {/* Script / editable fields */}
+      <div className="flex-1 min-w-0 space-y-3">
+        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">台本構成</h5>
+        <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-3">
+          <div className="grid grid-cols-5 gap-1.5 text-center">
+            {["Hook (3秒)", "課題 (10秒)", "エビデンス (20秒)", "実践 (15秒)", "CTA (7秒)"].map((s, i) => (
+              <div key={i} className={`py-1.5 rounded text-[10px] font-medium ${i === 0 ? "bg-pink-200 text-pink-800" : "bg-white text-slate-600"}`}>{s}</div>
+            ))}
+          </div>
+        </div>
+        <Section title="Hook"><EditableText text={content.hook} fieldKey="hook" onUpdate={onUpdate} /></Section>
+        <Section title="課題"><EditableText text={content.problem} fieldKey="problem" onUpdate={onUpdate} /></Section>
+        <Section title="エビデンス"><EditableText text={content.evidence} fieldKey="evidence" onUpdate={onUpdate} /></Section>
+        <Section title="引用元"><EditableText text={content.evidence_source} fieldKey="evidence_source" onUpdate={onUpdate} /></Section>
+        <Section title="実践"><EditableText text={content.practice} fieldKey="practice" onUpdate={onUpdate} /></Section>
+        <Section title="CTA"><EditableText text={content.cta} fieldKey="cta" onUpdate={onUpdate} /></Section>
         <Section title="サムネイル"><EditableText text={content.thumbnail_text} fieldKey="thumbnail_text" onUpdate={onUpdate} /></Section>
         <Section title="キャプション"><EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} /></Section>
         {Array.isArray(content.hashtags) && <Section title="ハッシュタグ"><EditableTags tags={(content.hashtags as string[])} fieldKey="hashtags" onUpdate={onUpdate} /></Section>}
+        <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
       </div>
-      <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
     </div>
   );
 }
 
 function StoriesPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const slides = content.slides as { text: string; image_note: string }[] | undefined;
+  const [activeSlide, setActiveSlide] = useState(0);
   return (
-    <div>
-      <Section title="タイプ"><EditableText text={content.story_type} fieldKey="story_type" onUpdate={onUpdate} /></Section>
-      <Section title="投票/質問"><EditableText text={content.poll_question} fieldKey="poll_question" onUpdate={onUpdate} /></Section>
-      {!!content.countdown_title && (
-        <>
-          <Section title="カウントダウンタイトル"><EditableText text={content.countdown_title} fieldKey="countdown_title" onUpdate={onUpdate} /></Section>
-          <Section title="カウントダウン日付"><EditableText text={content.countdown_date} fieldKey="countdown_date" onUpdate={onUpdate} /></Section>
-        </>
-      )}
-      {slides && (
-        <div className="grid grid-cols-5 gap-2 mt-3">
-          {slides.map((s, i) => (
-            <div key={i} className="bg-gray-100 rounded-lg p-3 text-center">
-              <span className="text-xs font-bold text-gray-500">#{i + 1}</span>
-              <EditableText text={s.text} fieldKey={`slides.${i}.text`} onUpdate={onUpdate} className="text-xs mt-1" />
-              <EditableText text={s.image_note} fieldKey={`slides.${i}.image_note`} onUpdate={onUpdate} className="text-xs text-gray-400 mt-1" />
-            </div>
-          ))}
+    <div className="flex gap-8 items-start">
+      <PhoneFrame>
+        <div className="relative min-h-[560px] bg-gradient-to-b from-orange-400 via-pink-400 to-purple-500 flex flex-col">
+          {/* Progress bars */}
+          <div className="absolute top-8 left-3 right-3 z-20 flex gap-1">
+            {(slides ?? [{ text: "", image_note: "" }]).map((_, i) => (
+              <div key={i} className="flex-1 h-0.5 rounded-full bg-white/30 overflow-hidden cursor-pointer" onClick={() => setActiveSlide(i)}>
+                <div className={`h-full rounded-full transition-all ${i <= activeSlide ? "bg-white w-full" : "w-0"}`} />
+              </div>
+            ))}
+          </div>
+          {/* Story content */}
+          <div className="flex-1 flex items-center justify-center px-6 pt-16">
+            {!!content.countdown_title ? (
+              <div className="text-center">
+                <EditableText text={content.countdown_title} fieldKey="countdown_title" onUpdate={onUpdate} className="!text-white text-xl font-bold" />
+                <div className="mt-4 flex gap-3 justify-center">
+                  {["日", "時", "分", "秒"].map((u, i) => (
+                    <div key={i} className="bg-white/20 backdrop-blur rounded-lg px-3 py-2 text-center">
+                      <span className="text-white text-2xl font-bold">{[7, 14, 30, 0][i]}</span>
+                      <span className="text-white/70 text-[10px] block">{u}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : content.poll_question ? (
+              <div className="w-full text-center">
+                <EditableText text={content.poll_question} fieldKey="poll_question" onUpdate={onUpdate} className="!text-white text-lg font-bold mb-4" />
+                <div className="space-y-2 px-4">
+                  <div className="bg-white/20 backdrop-blur rounded-full py-2.5 text-white text-sm">はい</div>
+                  <div className="bg-white/20 backdrop-blur rounded-full py-2.5 text-white text-sm">いいえ</div>
+                </div>
+              </div>
+            ) : slides && slides[activeSlide] ? (
+              <div className="text-center">
+                <EditableText text={slides[activeSlide].text} fieldKey={`slides.${activeSlide}.text`} onUpdate={onUpdate} className="!text-white text-lg font-bold" />
+                <p className="text-white/50 text-xs mt-3">{slides[activeSlide].image_note}</p>
+              </div>
+            ) : (
+              <p className="text-white/60 text-sm">ストーリーコンテンツ</p>
+            )}
+          </div>
+          {/* Swipe up area */}
+          <div className="absolute bottom-6 left-0 right-0 text-center">
+            <svg className="w-6 h-6 text-white mx-auto animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+            <span className="text-white text-xs">もっと見る</span>
+          </div>
         </div>
-      )}
+      </PhoneFrame>
+
+      <div className="flex-1 min-w-0 space-y-3">
+        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ストーリー構成</h5>
+        <Section title="タイプ"><EditableText text={content.story_type} fieldKey="story_type" onUpdate={onUpdate} /></Section>
+        <Section title="投票/質問"><EditableText text={content.poll_question} fieldKey="poll_question" onUpdate={onUpdate} /></Section>
+        {!!content.countdown_title && (
+          <>
+            <Section title="カウントダウンタイトル"><EditableText text={content.countdown_title} fieldKey="countdown_title" onUpdate={onUpdate} /></Section>
+            <Section title="カウントダウン日付"><EditableText text={content.countdown_date} fieldKey="countdown_date" onUpdate={onUpdate} /></Section>
+          </>
+        )}
+        {slides && (
+          <div className="grid grid-cols-5 gap-2 mt-3">
+            {slides.map((s, i) => (
+              <div key={i} className={`rounded-lg p-3 text-center cursor-pointer transition-all ${i === activeSlide ? "bg-pink-100 ring-2 ring-pink-300" : "bg-gray-100 hover:bg-gray-200"}`} onClick={() => setActiveSlide(i)}>
+                <span className="text-xs font-bold text-gray-500">#{i + 1}</span>
+                <EditableText text={s.text} fieldKey={`slides.${i}.text`} onUpdate={onUpdate} className="text-xs mt-1" />
+                <EditableText text={s.image_note} fieldKey={`slides.${i}.image_note`} onUpdate={onUpdate} className="text-xs text-gray-400 mt-1" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 function FeedPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const slides = [
-    { label: "表紙", key: "slide1_cover", text: content.slide1_cover },
-    { label: "誤解", key: "slide2_misconception", text: content.slide2_misconception },
-    { label: "正しい理解", key: "slide3_truth", text: content.slide3_truth },
-    { label: "実践", key: "slide4_practice", text: content.slide4_practice },
-    { label: "CTA", key: "slide5_cta", text: content.slide5_cta },
+    { label: "表紙", key: "slide1_cover", text: content.slide1_cover, bg: "from-indigo-500 to-purple-600" },
+    { label: "誤解", key: "slide2_misconception", text: content.slide2_misconception, bg: "from-red-400 to-pink-500" },
+    { label: "正しい理解", key: "slide3_truth", text: content.slide3_truth, bg: "from-emerald-400 to-teal-500" },
+    { label: "実践", key: "slide4_practice", text: content.slide4_practice, bg: "from-blue-400 to-indigo-500" },
+    { label: "CTA", key: "slide5_cta", text: content.slide5_cta, bg: "from-amber-400 to-orange-500" },
   ];
+  const [activeSlide, setActiveSlide] = useState(0);
   return (
-    <div>
-      <div className="grid grid-cols-5 gap-2 mb-4">
-        {slides.map((s, i) => (
-          <div key={i} className="bg-gray-50 border rounded-lg p-3">
-            <span className="text-xs font-bold text-gray-500">{i + 1}. {s.label}</span>
-            <div className="mt-2">
-              <EditableText text={s.text} fieldKey={s.key} onUpdate={onUpdate} />
-            </div>
+    <div className="flex gap-8 items-start">
+      <PhoneFrame>
+        <div className="min-h-[560px] bg-white flex flex-col">
+          {/* IG header */}
+          <div className="px-3 pt-8 pb-2 flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">F</div>
+            <span className="text-xs font-bold">fam_official</span>
           </div>
-        ))}
+          {/* Carousel image area */}
+          <div className={`aspect-square bg-gradient-to-br ${slides[activeSlide].bg} flex items-center justify-center px-6 relative`}>
+            <div className="text-center">
+              <span className="text-white/50 text-[10px] uppercase tracking-wider">{slides[activeSlide].label}</span>
+              <EditableText text={slides[activeSlide].text} fieldKey={slides[activeSlide].key} onUpdate={onUpdate} className="!text-white text-base font-bold mt-2 leading-relaxed" />
+            </div>
+            {/* Carousel dots */}
+            <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1">
+              {slides.map((_, i) => (
+                <div key={i} className={`w-1.5 h-1.5 rounded-full cursor-pointer ${i === activeSlide ? "bg-blue-500" : "bg-white/50"}`} onClick={() => setActiveSlide(i)} />
+              ))}
+            </div>
+            {/* Nav arrows */}
+            {activeSlide > 0 && (
+              <button className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/80 rounded-full flex items-center justify-center" onClick={() => setActiveSlide(activeSlide - 1)}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+            )}
+            {activeSlide < slides.length - 1 && (
+              <button className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/80 rounded-full flex items-center justify-center" onClick={() => setActiveSlide(activeSlide + 1)}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
+            )}
+          </div>
+          {/* Actions */}
+          <div className="px-3 py-2 flex items-center gap-4">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+            <div className="flex-1" />
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+          </div>
+          {/* Caption */}
+          <div className="px-3 pb-3">
+            <span className="text-xs font-bold">fam_official </span>
+            <EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} className="!text-xs inline" />
+          </div>
+        </div>
+      </PhoneFrame>
+
+      <div className="flex-1 min-w-0 space-y-3">
+        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">カルーセル構成</h5>
+        <div className="grid grid-cols-5 gap-2 mb-4">
+          {slides.map((s, i) => (
+            <div key={i} className={`border rounded-lg p-3 cursor-pointer transition-all ${i === activeSlide ? "bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200" : "bg-gray-50 hover:bg-gray-100"}`} onClick={() => setActiveSlide(i)}>
+              <span className="text-xs font-bold text-gray-500">{i + 1}. {s.label}</span>
+              <div className="mt-2">
+                <EditableText text={s.text} fieldKey={s.key} onUpdate={onUpdate} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <Section title="キャプション"><EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} /></Section>
+        <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
       </div>
-      <Section title="キャプション"><EditableText text={content.caption} fieldKey="caption" onUpdate={onUpdate} /></Section>
-      <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
     </div>
   );
 }
@@ -784,51 +1000,160 @@ function FeedPreview({ content, onUpdate }: { content: Record<string, unknown>; 
 function LPPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const faqs = content.faqs as { q: string; a: string }[] | undefined;
   return (
-    <div className="space-y-3">
-      <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-5 text-center">
-        <h3 className="text-lg font-bold"><EditableText text={content.title} fieldKey="title" onUpdate={onUpdate} /></h3>
-        <EditableText text={content.subtitle} fieldKey="subtitle" onUpdate={onUpdate} />
-        <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
-          <div><span className="text-gray-400 block">日時</span><EditableText text={content.event_date} fieldKey="event_date" onUpdate={onUpdate} /></div>
-          <div><span className="text-gray-400 block">場所</span><EditableText text={content.event_location} fieldKey="event_location" onUpdate={onUpdate} /></div>
-          <div><span className="text-gray-400 block">料金</span><EditableText text={content.event_price} fieldKey="event_price" onUpdate={onUpdate} /></div>
+    <BrowserFrame url="https://fam.example.com/event/seminar-2026">
+      <div className="max-w-lg mx-auto">
+        {/* Hero */}
+        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-8 py-12 text-center text-white">
+          <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+          </div>
+          <EditableText text={content.title} fieldKey="title" onUpdate={onUpdate} className="!text-white text-2xl font-bold" />
+          <EditableText text={content.subtitle} fieldKey="subtitle" onUpdate={onUpdate} className="!text-white/80 mt-2" />
+          <div className="grid grid-cols-3 gap-4 mt-6 text-sm">
+            <div className="bg-white/10 rounded-lg px-3 py-2">
+              <span className="text-white/60 text-[10px] block">日時</span>
+              <EditableText text={content.event_date} fieldKey="event_date" onUpdate={onUpdate} className="!text-white !text-xs font-medium" />
+            </div>
+            <div className="bg-white/10 rounded-lg px-3 py-2">
+              <span className="text-white/60 text-[10px] block">場所</span>
+              <EditableText text={content.event_location} fieldKey="event_location" onUpdate={onUpdate} className="!text-white !text-xs font-medium" />
+            </div>
+            <div className="bg-white/10 rounded-lg px-3 py-2">
+              <span className="text-white/60 text-[10px] block">料金</span>
+              <EditableText text={content.event_price} fieldKey="event_price" onUpdate={onUpdate} className="!text-white !text-xs font-medium" />
+            </div>
+          </div>
+          <div className="mt-6">
+            <div className="inline-block bg-white text-emerald-600 font-bold px-8 py-3 rounded-full shadow-lg">
+              <EditableText text={content.cta_text} fieldKey="cta_text" onUpdate={onUpdate} className="!text-emerald-600" />
+            </div>
+          </div>
         </div>
-        <Section title="CTAボタン"><EditableText text={content.cta_text} fieldKey="cta_text" onUpdate={onUpdate} /></Section>
+
+        {/* Benefits */}
+        <div className="px-8 py-8">
+          <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">参加メリット</h3>
+          <EditableText text={Array.isArray(content.benefits) ? (content.benefits as string[]).join("\n") : content.benefits} fieldKey="benefits" onUpdate={onUpdate} />
+        </div>
+
+        {/* Speaker */}
+        {!!(content.speaker_name || content.speaker_title) && (
+          <div className="px-8 py-6 bg-slate-50">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">登壇者</h3>
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center shrink-0">
+                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+              </div>
+              <div>
+                <EditableText text={content.speaker_name} fieldKey="speaker_name" onUpdate={onUpdate} className="font-bold text-slate-800" />
+                <EditableText text={content.speaker_title} fieldKey="speaker_title" onUpdate={onUpdate} className="text-slate-500 !text-xs" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Agenda */}
+        {!!content.agenda && (
+          <div className="px-8 py-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">アジェンダ</h3>
+            <EditableText text={content.agenda} fieldKey="agenda" onUpdate={onUpdate} />
+          </div>
+        )}
+
+        {/* FAQ */}
+        {faqs && (
+          <div className="px-8 py-6 bg-slate-50">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">よくある質問</h3>
+            <div className="space-y-3">
+              {faqs.map((f, i) => (
+                <div key={i} className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex gap-2 items-start">
+                    <span className="text-emerald-600 font-bold text-sm shrink-0">Q.</span>
+                    <EditableText text={f.q} fieldKey={`faqs.${i}.q`} onUpdate={onUpdate} className="font-medium" />
+                  </div>
+                  <div className="flex gap-2 items-start mt-2">
+                    <span className="text-slate-400 font-bold text-sm shrink-0">A.</span>
+                    <EditableText text={f.a} fieldKey={`faqs.${i}.a`} onUpdate={onUpdate} className="text-slate-600" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* SEO & disclaimer */}
+        <div className="px-8 py-4 border-t border-slate-100 space-y-2">
+          <div className="text-[10px] text-slate-400 uppercase">SEO</div>
+          <EditableText text={content.meta_title} fieldKey="meta_title" onUpdate={onUpdate} className="text-xs font-medium" />
+          <EditableText text={content.meta_description} fieldKey="meta_description" onUpdate={onUpdate} className="text-xs text-slate-500" />
+          <EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3 mt-2" />
+        </div>
       </div>
-      <Section title="ベネフィット"><EditableText text={Array.isArray(content.benefits) ? (content.benefits as string[]).join("\n") : content.benefits} fieldKey="benefits" onUpdate={onUpdate} /></Section>
-      <Section title="アジェンダ"><EditableText text={content.agenda} fieldKey="agenda" onUpdate={onUpdate} /></Section>
-      <Section title="登壇者名"><EditableText text={content.speaker_name} fieldKey="speaker_name" onUpdate={onUpdate} /></Section>
-      <Section title="登壇者肩書き"><EditableText text={content.speaker_title} fieldKey="speaker_title" onUpdate={onUpdate} /></Section>
-      {faqs && <Section title="FAQ">{faqs.map((f, i) => <div key={i} className="mb-2"><div className="text-sm font-medium">Q: <EditableText text={f.q} fieldKey={`faqs.${i}.q`} onUpdate={onUpdate} className="inline" /></div><div className="text-sm text-gray-600">A: <EditableText text={f.a} fieldKey={`faqs.${i}.a`} onUpdate={onUpdate} className="inline" /></div></div>)}</Section>}
-      <Section title="SEO タイトル"><EditableText text={content.meta_title} fieldKey="meta_title" onUpdate={onUpdate} className="text-xs" /></Section>
-      <Section title="SEO ディスクリプション"><EditableText text={content.meta_description} fieldKey="meta_description" onUpdate={onUpdate} className="text-xs" /></Section>
-      <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
-    </div>
+    </BrowserFrame>
   );
 }
 
 function NotePreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   return (
-    <div className="space-y-3">
-      <Section title="タイトル案1"><EditableText text={content.title_option1} fieldKey="title_option1" onUpdate={onUpdate} className="font-medium" /></Section>
-      <Section title="タイトル案2"><EditableText text={content.title_option2} fieldKey="title_option2" onUpdate={onUpdate} className="font-medium" /></Section>
-      {!!content.title_option3 && <Section title="タイトル案3"><EditableText text={content.title_option3} fieldKey="title_option3" onUpdate={onUpdate} className="font-medium" /></Section>}
-      <Section title="リード"><EditableText text={content.lead} fieldKey="lead" onUpdate={onUpdate} /></Section>
-      <Section title="本文">
-        <div
-          className="bg-gray-50 rounded p-4 font-mono text-xs whitespace-pre-wrap max-h-80 overflow-auto outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200 hover:bg-yellow-50/50 cursor-text"
-          contentEditable={!!onUpdate}
-          suppressContentEditableWarning
-          onBlur={(e) => onUpdate?.("body_markdown", e.currentTarget.textContent ?? "")}
-        >
-          {String(content.body_markdown ?? "")}
+    <div className="flex gap-8 items-start">
+      <BrowserFrame url="https://note.com/fam_official/n/xxx">
+        <div className="max-w-lg mx-auto px-6 py-8">
+          {/* OG image placeholder */}
+          <div className="aspect-video bg-gradient-to-br from-slate-600 to-slate-800 rounded-lg mb-6 flex items-center justify-center">
+            <div className="text-center">
+              <svg className="w-12 h-12 text-white/30 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              <p className="text-white/40 text-xs">OG画像</p>
+            </div>
+          </div>
+          {/* Title */}
+          <EditableText text={content.title_option1} fieldKey="title_option1" onUpdate={onUpdate} className="text-2xl font-bold text-slate-900 leading-tight" />
+          {/* Author */}
+          <div className="flex items-center gap-3 mt-4 mb-6 pb-6 border-b border-slate-100">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold text-sm">F</div>
+            <div>
+              <span className="text-sm font-bold text-slate-800">FAM公式</span>
+              <span className="text-xs text-slate-400 block">管理栄養士監修</span>
+            </div>
+          </div>
+          {/* Lead */}
+          <EditableText text={content.lead} fieldKey="lead" onUpdate={onUpdate} className="text-slate-600 leading-relaxed mb-6" />
+          {/* Body */}
+          <div
+            className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap outline-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-200 hover:bg-yellow-50/50 cursor-text min-h-[200px]"
+            contentEditable={!!onUpdate}
+            suppressContentEditableWarning
+            onBlur={(e) => onUpdate?.("body_markdown", e.currentTarget.textContent ?? "")}
+          >
+            {String(content.body_markdown ?? "")}
+          </div>
+          {/* Tags */}
+          <div className="flex flex-wrap gap-2 mt-6 pt-6 border-t border-slate-100">
+            {((content.tags as string[]) ?? []).map((t, i) => (
+              <span key={i} className="px-3 py-1 bg-slate-100 rounded-full text-xs text-slate-600">#{t}</span>
+            ))}
+          </div>
+          {/* CTA */}
+          {!!content.cta_label && (
+            <div className="mt-6 text-center">
+              <div className="inline-block bg-green-500 text-white font-bold px-8 py-3 rounded-full">
+                <EditableText text={content.cta_label} fieldKey="cta_label" onUpdate={onUpdate} className="!text-white" />
+              </div>
+            </div>
+          )}
+          {/* Disclaimer */}
+          <EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3 mt-6" />
         </div>
-      </Section>
-      <Section title="タグ"><EditableTags tags={(content.tags as string[]) ?? []} fieldKey="tags" onUpdate={onUpdate} /></Section>
-      <Section title="OGテキスト"><EditableText text={content.og_text} fieldKey="og_text" onUpdate={onUpdate} /></Section>
-      <Section title="CTAラベル"><EditableText text={content.cta_label} fieldKey="cta_label" onUpdate={onUpdate} /></Section>
-      <Section title="CTA URL"><EditableText text={content.cta_url} fieldKey="cta_url" onUpdate={onUpdate} /></Section>
-      <Section title="免責文"><EditableText text={content.disclaimer} fieldKey="disclaimer" onUpdate={onUpdate} className="text-xs text-yellow-700 bg-yellow-50 rounded p-3" /></Section>
+      </BrowserFrame>
+
+      <div className="flex-1 min-w-0 space-y-3 shrink-0 w-64">
+        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">記事設定</h5>
+        <Section title="タイトル案1"><EditableText text={content.title_option1} fieldKey="title_option1" onUpdate={onUpdate} className="font-medium" /></Section>
+        <Section title="タイトル案2"><EditableText text={content.title_option2} fieldKey="title_option2" onUpdate={onUpdate} className="font-medium" /></Section>
+        {!!content.title_option3 && <Section title="タイトル案3"><EditableText text={content.title_option3} fieldKey="title_option3" onUpdate={onUpdate} className="font-medium" /></Section>}
+        <Section title="タグ"><EditableTags tags={(content.tags as string[]) ?? []} fieldKey="tags" onUpdate={onUpdate} /></Section>
+        <Section title="OGテキスト"><EditableText text={content.og_text} fieldKey="og_text" onUpdate={onUpdate} /></Section>
+        <Section title="CTA URL"><EditableText text={content.cta_url} fieldKey="cta_url" onUpdate={onUpdate} /></Section>
+      </div>
     </div>
   );
 }
@@ -836,29 +1161,78 @@ function NotePreview({ content, onUpdate }: { content: Record<string, unknown>; 
 function LinePreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const steps = content.step_messages as { timing: string; content: string }[] | undefined;
   return (
-    <div className="space-y-3">
-      <Section title="配信タイプ"><EditableText text={content.delivery_type} fieldKey="delivery_type" onUpdate={onUpdate} /></Section>
-      <Section title="セグメント"><EditableText text={content.segment} fieldKey="segment" onUpdate={onUpdate} /></Section>
-      <Section title="メッセージ本文">
-        <div className="bg-green-50 rounded-lg p-4 max-w-sm">
-          <EditableText text={content.message_text} fieldKey="message_text" onUpdate={onUpdate} />
-        </div>
-      </Section>
-      <Section title="CTAラベル"><EditableText text={content.cta_label} fieldKey="cta_label" onUpdate={onUpdate} /></Section>
-      {steps && (
-        <Section title="ステップ配信">
-          <div className="space-y-2">
-            {steps.map((s, i) => (
-              <div key={i} className="flex gap-3 items-start">
-                <EditableText text={s.timing} fieldKey={`step_messages.${i}.timing`} onUpdate={onUpdate} className="px-2 py-1 text-xs bg-gray-100 rounded font-medium shrink-0" />
-                <EditableText text={s.content} fieldKey={`step_messages.${i}.content`} onUpdate={onUpdate} />
+    <div className="flex gap-8 items-start">
+      <LineChatFrame>
+        {/* Message bubble */}
+        <div className="flex gap-2 items-end">
+          <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold shrink-0">F</div>
+          <div className="bg-white rounded-2xl rounded-bl-md px-4 py-3 max-w-[220px] shadow-sm">
+            <EditableText text={content.message_text} fieldKey="message_text" onUpdate={onUpdate} className="!text-xs text-slate-800 leading-relaxed" />
+            {!!content.cta_label && (
+              <div className="mt-2 pt-2 border-t border-slate-100">
+                <div className="bg-green-500 text-white text-xs font-bold py-2 px-4 rounded-full text-center">
+                  <EditableText text={content.cta_label} fieldKey="cta_label" onUpdate={onUpdate} className="!text-white !text-xs" />
+                </div>
               </div>
-            ))}
+            )}
           </div>
-        </Section>
-      )}
-      <Section title="リッチメニュータイトル"><EditableText text={content.rich_title} fieldKey="rich_title" onUpdate={onUpdate} /></Section>
-      <Section title="リッチメニューCTA"><EditableText text={content.rich_cta} fieldKey="rich_cta" onUpdate={onUpdate} /></Section>
+        </div>
+        <div className="text-[9px] text-white/50 ml-10">14:00</div>
+
+        {/* Step messages */}
+        {steps && steps.map((s, i) => (
+          <div key={i}>
+            <div className="text-center">
+              <span className="bg-white/20 backdrop-blur text-white text-[9px] px-3 py-0.5 rounded-full">{s.timing}</span>
+            </div>
+            <div className="flex gap-2 items-end mt-2">
+              <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold shrink-0">F</div>
+              <div className="bg-white rounded-2xl rounded-bl-md px-4 py-3 max-w-[220px] shadow-sm">
+                <EditableText text={s.content} fieldKey={`step_messages.${i}.content`} onUpdate={onUpdate} className="!text-xs text-slate-800 leading-relaxed" />
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Rich menu mock */}
+        {!!content.rich_title && (
+          <div className="mt-auto">
+            <div className="bg-white rounded-xl overflow-hidden shadow-md">
+              <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-4 py-3 text-center">
+                <EditableText text={content.rich_title} fieldKey="rich_title" onUpdate={onUpdate} className="!text-white !text-xs font-bold" />
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-slate-100">
+                <div className="py-3 text-center">
+                  <EditableText text={content.rich_cta} fieldKey="rich_cta" onUpdate={onUpdate} className="!text-xs text-green-600 font-medium" />
+                </div>
+                <div className="py-3 text-center text-xs text-slate-400">メニュー</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </LineChatFrame>
+
+      <div className="flex-1 min-w-0 space-y-3">
+        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">LINE配信設定</h5>
+        <Section title="配信タイプ"><EditableText text={content.delivery_type} fieldKey="delivery_type" onUpdate={onUpdate} /></Section>
+        <Section title="セグメント"><EditableText text={content.segment} fieldKey="segment" onUpdate={onUpdate} /></Section>
+        <Section title="メッセージ本文"><EditableText text={content.message_text} fieldKey="message_text" onUpdate={onUpdate} /></Section>
+        <Section title="CTAラベル"><EditableText text={content.cta_label} fieldKey="cta_label" onUpdate={onUpdate} /></Section>
+        {steps && (
+          <Section title="ステップ配信">
+            <div className="space-y-2">
+              {steps.map((s, i) => (
+                <div key={i} className="flex gap-3 items-start">
+                  <EditableText text={s.timing} fieldKey={`step_messages.${i}.timing`} onUpdate={onUpdate} className="px-2 py-1 text-xs bg-gray-100 rounded font-medium shrink-0" />
+                  <EditableText text={s.content} fieldKey={`step_messages.${i}.content`} onUpdate={onUpdate} />
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+        <Section title="リッチメニュータイトル"><EditableText text={content.rich_title} fieldKey="rich_title" onUpdate={onUpdate} /></Section>
+        <Section title="リッチメニューCTA"><EditableText text={content.rich_cta} fieldKey="rich_cta" onUpdate={onUpdate} /></Section>
+      </div>
     </div>
   );
 }
