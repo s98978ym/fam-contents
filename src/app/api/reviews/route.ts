@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     decision: body.decision,
     comment: body.comment,
     labels: body.labels ?? [],
+    reply_to: body.reply_to ?? null,
   });
 
   if (body.decision === "approved") {

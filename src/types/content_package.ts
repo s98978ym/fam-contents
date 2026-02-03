@@ -95,6 +95,7 @@ export interface ReviewRecord {
   comment: string;
   labels: string[];
   created_at: string;
+  reply_to?: string; // ID of the review this is replying to
 }
 
 export interface PublishJob {
