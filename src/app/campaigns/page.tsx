@@ -59,6 +59,33 @@ const WEEK_OPTIONS = [
 ];
 
 // ---------------------------------------------------------------------------
+// Assignee avatar colors & component
+// ---------------------------------------------------------------------------
+
+const AVATAR_COLORS = [
+  "bg-rose-500", "bg-sky-500", "bg-amber-500", "bg-emerald-500",
+  "bg-violet-500", "bg-pink-500", "bg-cyan-500", "bg-orange-500",
+  "bg-lime-500", "bg-fuchsia-500", "bg-teal-500", "bg-red-500",
+];
+
+function avatarColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+function AssigneeAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg" }) {
+  const color = avatarColor(name);
+  const initial = name.slice(0, 1);
+  const sizeMap = { sm: "w-4 h-4 text-[7px]", md: "w-5 h-5 text-[8px]", lg: "w-6 h-6 text-[9px]" };
+  return (
+    <span className={`${color} ${sizeMap[size]} rounded-full inline-flex items-center justify-center text-white font-bold shrink-0 ring-1 ring-white`} title={name}>
+      {initial}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -119,7 +146,6 @@ function DotPopover({ info, onClose }: { info: DotInfo; onClose: () => void }) {
       className="fixed z-50 w-72 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden"
       style={{ left: Math.min(info.x - 136, window.innerWidth - 300), top: info.y + 12 }}
     >
-      {/* Header bar */}
       <div className={`${cfg.headerBg} px-4 py-2 flex items-center justify-between`}>
         <span className="text-white text-xs font-medium truncate">{info.campaign.name}</span>
         <button onClick={onClose} className="text-white/70 hover:text-white ml-2 shrink-0">
@@ -127,24 +153,33 @@ function DotPopover({ info, onClose }: { info: DotInfo; onClose: () => void }) {
         </button>
       </div>
       <div className="px-4 py-3">
-        {/* Channel + status */}
         <div className="flex items-center gap-1.5 mb-2">
           <span className={`${chColor} text-white text-[10px] font-semibold px-2 py-0.5 rounded`}>
             {CHANNEL_LABEL[v.channel] ?? v.channel}
           </span>
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${vs.cls}`}>{vs.label}</span>
         </div>
-        {/* Summary */}
         <p className="text-sm text-slate-800 font-medium leading-snug mb-2">
           {getVariantSummary(v) || "(内容なし)"}
         </p>
-        {/* Date */}
         {v.scheduled_at && (
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
             <span>{new Date(v.scheduled_at).toLocaleDateString("ja-JP", { year: "numeric", month: "short", day: "numeric" })}</span>
           </div>
         )}
+        {v.assignee && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-2">
+            <AssigneeAvatar name={v.assignee} size="sm" />
+            <span>{v.assignee}</span>
+          </div>
+        )}
+        <div className="border-t border-slate-100 pt-2 mt-1">
+          <p className="text-[10px] text-slate-400 flex items-center gap-1">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
+            ドラッグで日程を変更できます
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -419,7 +454,7 @@ export default function CampaignsPage() {
   }
 
   function handleDotClick(e: React.MouseEvent, dot: { variant: ChannelVariant; campaign: Campaign; objective: Objective }) {
-    if (dragRef.current) return; // ignore click after drag
+    if (dragRef.current) return;
     e.stopPropagation();
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     setDotInfo({ variant: dot.variant, campaign: dot.campaign, objective: dot.objective, x: rect.left + rect.width / 2, y: rect.bottom });
@@ -449,7 +484,6 @@ export default function CampaignsPage() {
       const newMs = dragRef.current.tsMs + (pct / 100) * dragRef.current.spanMs;
       updateVariantDate(variantId, new Date(newMs));
       setDragPct(null);
-      // Small delay so click handler doesn't fire
       setTimeout(() => { dragRef.current = null; }, 50);
     }
 
@@ -463,13 +497,33 @@ export default function CampaignsPage() {
     return ((today.getTime() - tsMs) / spanMs) * 100;
   }, [today, timelineStart, timelineEnd]);
 
+  // Count all dots across campaigns
+  const totalDots = useMemo(() => {
+    let count = 0;
+    for (const c of campaigns) {
+      count += getVariantsForCampaign(c.content_ids).filter((v) => v.scheduled_at).length;
+    }
+    return count;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaigns, variants]);
+
   return (
     <div>
       {/* Popover */}
       {dotInfo && <DotPopover info={dotInfo} onClose={() => setDotInfo(null)} />}
 
       {/* Toast */}
-      {toast && <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm">{toast}</div>}
+      {toast && <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium">{toast}</div>}
+
+      {/* Drag overlay - shows during D&D with drop zone hints */}
+      {dndVariant && (
+        <div className="fixed inset-0 z-40 pointer-events-none">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-xl text-xs font-medium flex items-center gap-2">
+            <svg className="w-4 h-4 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+            移動先のキャンペーンにドロップしてください
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -493,9 +547,22 @@ export default function CampaignsPage() {
       {/* Timeline                                                           */}
       {/* ----------------------------------------------------------------- */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Period selector */}
+        {/* Header with operation hints */}
         <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50 border-b border-slate-100">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">タイムライン</span>
+          <div className="flex items-center gap-4">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">タイムライン</span>
+            {/* Operation hints */}
+            <div className="hidden sm:flex items-center gap-3 text-[10px] text-slate-400">
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-indigo-400 inline-flex items-center justify-center"><span className="w-1 h-1 rounded-full bg-white" /></span>
+                クリックで詳細 / ドラッグで日程変更
+              </span>
+              <span className="border-l border-slate-200 pl-3 flex items-center gap-1">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                キャンペーンをクリックで展開・編集
+              </span>
+            </div>
+          </div>
           <div className="flex gap-0.5 bg-slate-200/60 rounded-lg p-0.5">
             {WEEK_OPTIONS.map((opt) => (
               <button
@@ -513,22 +580,28 @@ export default function CampaignsPage() {
 
         {/* Assignee tabs */}
         {allAssignees.length > 0 && (
-          <div className="flex items-center gap-1 px-5 py-2 border-b border-slate-100 bg-white">
-            <span className="text-[10px] text-slate-400 mr-1">担当:</span>
-            {[
-              { key: "all", label: "全員" },
-              ...allAssignees.map((a) => ({ key: a, label: a })),
-            ].map((opt) => (
+          <div className="flex items-center gap-1.5 px-5 py-2 border-b border-slate-100 bg-white">
+            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            <button
+              onClick={() => { setAssigneeTab("all"); setDotInfo(null); }}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                assigneeTab === "all" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              全員
+            </button>
+            {allAssignees.map((a) => (
               <button
-                key={opt.key}
-                onClick={() => { setAssigneeTab(opt.key); setDotInfo(null); }}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                  assigneeTab === opt.key
-                    ? "bg-indigo-600 text-white"
+                key={a}
+                onClick={() => { setAssigneeTab(a); setDotInfo(null); }}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all ${
+                  assigneeTab === a
+                    ? "bg-indigo-600 text-white ring-2 ring-indigo-200"
                     : "text-slate-500 hover:bg-slate-100"
                 }`}
               >
-                {opt.label}
+                <AssigneeAvatar name={a} size="sm" />
+                <span>{a}</span>
               </button>
             ))}
           </div>
@@ -558,7 +631,6 @@ export default function CampaignsPage() {
               {weekMarkers.map((m, i) => (
                 <div key={i} className="absolute w-px h-1.5 bg-slate-300 -top-px" style={{ left: `${m.offsetPct}%` }} />
               ))}
-              {/* Today line (full height below) */}
               {todayPct >= 0 && todayPct <= 100 && (
                 <div className="absolute -top-1 flex flex-col items-center" style={{ left: `${todayPct}%` }}>
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
@@ -569,7 +641,7 @@ export default function CampaignsPage() {
 
           {/* Gantt rows */}
           <div className="space-y-3">
-            {Array.from(grouped.entries()).map(([objective, campaigns]) => {
+            {Array.from(grouped.entries()).map(([objective, campList]) => {
               const cfg = OBJECTIVE_CONFIG[objective];
               return (
                 <div key={objective}>
@@ -583,28 +655,32 @@ export default function CampaignsPage() {
                   </div>
 
                   {/* Campaigns */}
-                  {campaigns.map((camp) => {
+                  {campList.map((camp) => {
                     const barStyle = getBarStyle(camp.start_date, camp.end_date);
                     const dots = getContentDots(camp.content_ids, camp, objective);
                     const isActive = expandedCampaign === camp.id;
                     const st = STATUS_LABEL[camp.status] ?? STATUS_LABEL.planning;
                     const campVariants = getVariantsForCampaign(camp.content_ids);
+                    const isDropTarget = dropTarget === camp.id;
+                    const isDropCandidate = dndVariant && dndVariant.fromCampId !== camp.id;
                     return (
                       <div
                         key={camp.id}
-                        className={`rounded-md transition-all ${dropTarget === camp.id ? "ring-2 ring-indigo-400 bg-indigo-50/40" : ""}`}
+                        className={`rounded-lg transition-all ${isDropTarget ? "ring-2 ring-indigo-400 bg-indigo-50/50 shadow-md" : ""} ${isDropCandidate && !isDropTarget ? "ring-1 ring-dashed ring-slate-300 bg-slate-50/30" : ""}`}
                         onDragOver={(e) => { if (dndVariant && dndVariant.fromCampId !== camp.id) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(camp.id); } }}
                         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget((prev) => prev === camp.id ? null : prev); }}
                         onDrop={(e) => { e.preventDefault(); if (dndVariant) { moveVariant(dndVariant.fromCampId, camp.id, dndVariant.contentId); setDndVariant(null); } setDropTarget(null); }}
                       >
                         <div
-                          className={`flex items-center py-0.5 cursor-pointer group rounded-md transition-colors ${isActive ? "bg-slate-50" : "hover:bg-slate-50/50"}`}
+                          className={`flex items-center py-1 cursor-pointer group rounded-lg transition-colors ${isActive ? "bg-slate-50" : "hover:bg-slate-50/50"}`}
                           onClick={() => { setExpandedCampaign(isActive ? null : camp.id); setExpandedVariant(null); }}
                         >
                           <div className="w-52 shrink-0 truncate pr-3 pl-6 flex items-center gap-1.5">
+                            {/* Hover edit icon */}
                             <span className={`text-xs transition-colors ${isActive ? "text-slate-800 font-medium" : "text-slate-500 group-hover:text-slate-700"}`}>
                               {camp.name}
                             </span>
+                            <span className={`px-1.5 py-0.5 text-[9px] rounded-full font-semibold shrink-0 ${st.cls}`}>{st.label}</span>
                             <svg className={`w-3 h-3 text-slate-300 transition-transform shrink-0 ${isActive ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
@@ -621,24 +697,40 @@ export default function CampaignsPage() {
                                 style={{ left: barStyle.left, width: barStyle.width }}
                               />
                             )}
+                            {/* Drop target label */}
+                            {isDropTarget && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="bg-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg z-20">
+                                  ここにドロップ
+                                </span>
+                              </div>
+                            )}
                             {/* Dots */}
                             {dots.map((dot, di) => {
                               const isDragging = dragPct?.id === dot.variant.id;
                               const leftPct = isDragging ? dragPct.pct : dot.offsetPct;
+                              const chLabel = CHANNEL_LABEL[dot.variant.channel] ?? dot.variant.channel;
+                              const assignee = dot.variant.assignee;
                               return (
-                                <button
-                                  key={di}
-                                  className={`absolute top-1 w-5 h-5 rounded-full -translate-x-2.5 z-10 flex items-center justify-center transition-all ring-2 ring-white hover:ring-4 hover:scale-125 ${cfg.dot} shadow-sm ${isDragging ? "scale-150 ring-4 cursor-grabbing" : "cursor-grab"}`}
-                                  style={{ left: `${leftPct}%` }}
-                                  onClick={(e) => handleDotClick(e, dot)}
-                                  onMouseDown={(e) => {
-                                    const timelineEl = (e.currentTarget.parentElement as HTMLElement);
-                                    handleDotDragStart(e, dot.variant.id, timelineEl);
-                                  }}
-                                  title={`${CHANNEL_LABEL[dot.variant.channel] ?? dot.variant.channel} - ドラッグで日程変更`}
-                                >
-                                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                                </button>
+                                <div key={di} className="absolute -translate-x-2.5" style={{ left: `${leftPct}%`, top: 0 }}>
+                                  <button
+                                    className={`w-5 h-5 rounded-full z-10 flex items-center justify-center transition-all ring-2 ring-white hover:ring-4 hover:scale-125 ${cfg.dot} shadow-sm ${isDragging ? "scale-150 ring-4 cursor-grabbing" : "cursor-grab hover:shadow-md"} relative top-1`}
+                                    onClick={(e) => handleDotClick(e, dot)}
+                                    onMouseDown={(e) => {
+                                      const timelineEl = (e.currentTarget.parentElement!.parentElement as HTMLElement);
+                                      handleDotDragStart(e, dot.variant.id, timelineEl);
+                                    }}
+                                    title={`${chLabel} — ${getVariantSummary(dot.variant) || "(内容なし)"}${assignee ? `\n担当: ${assignee}` : ""}\nドラッグで日程変更`}
+                                  >
+                                    {assignee ? (
+                                      <span className={`w-full h-full rounded-full flex items-center justify-center text-[7px] font-bold text-white ${avatarColor(assignee)}`}>
+                                        {assignee.slice(0, 1)}
+                                      </span>
+                                    ) : (
+                                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                    )}
+                                  </button>
+                                </div>
                               );
                             })}
                           </div>
@@ -661,46 +753,60 @@ export default function CampaignsPage() {
                               </div>
                               {editingCampaign !== camp.id && (
                                 <div className="flex items-center gap-1 shrink-0">
-                                  <button onClick={() => setEditingCampaign(camp.id)} className="p-1 rounded hover:bg-white/60 text-slate-500" title="編集">
+                                  <button onClick={() => setEditingCampaign(camp.id)} className="p-1.5 rounded-md hover:bg-white/60 text-slate-500 hover:text-indigo-600 transition-colors" title="編集">
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                   </button>
-                                  <button onClick={() => { if (confirm(`「${camp.name}」を削除しますか？`)) deleteCampaign(camp.id); }} className="p-1 rounded hover:bg-red-100 text-red-400 hover:text-red-600" title="削除">
+                                  <button onClick={() => { if (confirm(`「${camp.name}」を削除しますか？`)) deleteCampaign(camp.id); }} className="p-1.5 rounded-md hover:bg-red-100 text-red-400 hover:text-red-600 transition-colors" title="削除">
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                   </button>
                                 </div>
                               )}
                             </div>
                             <div className="p-3">
-                              {/* Linked variants */}
+                              {/* Linked variants header with D&D hint */}
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">コンテンツ ({campVariants.length})</span>
+                                {campVariants.length > 0 && (
+                                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                                    ドラッグで他キャンペーンへ移動
+                                  </span>
+                                )}
                               </div>
                               {campVariants.length === 0 ? (
-                                <p className="text-xs text-slate-400 py-1">紐づけられたコンテンツはありません</p>
+                                <div className="text-center py-4 border-2 border-dashed border-slate-200 rounded-lg">
+                                  <p className="text-xs text-slate-400 mb-1">紐づけられたコンテンツはありません</p>
+                                  <p className="text-[10px] text-slate-300">下の「+ コンテンツを紐づけ」から追加</p>
+                                </div>
                               ) : (
                                 <div className="space-y-1.5 mb-3">
                                   {campVariants.map((v) => {
                                     const vs = VARIANT_STATUS[v.status] ?? VARIANT_STATUS.draft;
                                     const chColor = CHANNEL_COLOR[v.channel] ?? "bg-slate-500";
                                     const isVarExpanded = expandedVariant === v.id;
+                                    const isDndTarget = dndVariant?.contentId === v.content_id;
                                     return (
                                       <div
                                         key={v.id}
                                         draggable
                                         onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDndVariant({ contentId: v.content_id, fromCampId: camp.id }); }}
                                         onDragEnd={() => { setDndVariant(null); setDropTarget(null); }}
-                                        className={`rounded-lg border transition-all overflow-hidden ${isVarExpanded ? "border-slate-300 shadow-sm" : "border-slate-100 hover:border-slate-200"} ${dndVariant?.contentId === v.content_id ? "opacity-50" : ""} cursor-grab active:cursor-grabbing`}
+                                        className={`rounded-lg border transition-all overflow-hidden ${isVarExpanded ? "border-slate-300 shadow-sm" : "border-slate-100 hover:border-slate-300"} ${isDndTarget ? "opacity-40 scale-95" : ""} group/card`}
                                       >
                                         <div className={`px-3 py-2 flex items-center justify-between gap-3 cursor-pointer ${isVarExpanded ? "bg-slate-50" : "hover:bg-slate-50/50"}`} onClick={() => setExpandedVariant(isVarExpanded ? null : v.id)}>
                                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                                            <svg className="w-3 h-3 text-slate-300 shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                                            {/* Grip handle - prominent on hover */}
+                                            <div className="cursor-grab active:cursor-grabbing shrink-0 p-0.5 rounded hover:bg-slate-200 transition-colors" title="ドラッグで他キャンペーンへ移動">
+                                              <svg className="w-3.5 h-3.5 text-slate-300 group-hover/card:text-slate-500 transition-colors" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                                            </div>
                                             <span className={`${chColor} text-white text-[10px] font-semibold px-2 py-0.5 rounded shrink-0`}>{CHANNEL_LABEL[v.channel] ?? v.channel}</span>
                                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${vs.cls}`}>{vs.label}</span>
                                             <span className="text-xs text-slate-600 truncate">{getVariantSummary(v) || "(内容なし)"}</span>
                                           </div>
                                           <div className="flex items-center gap-1.5 shrink-0">
+                                            {v.assignee && <AssigneeAvatar name={v.assignee} size="sm" />}
                                             {v.scheduled_at && <span className="text-[10px] text-slate-400 tabular-nums">{new Date(v.scheduled_at).toLocaleDateString("ja-JP")}</span>}
-                                            <button onClick={(e) => { e.stopPropagation(); unlinkVariant(camp.id, v.content_id); }} className="p-0.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500" title="紐づけ解除">
+                                            <button onClick={(e) => { e.stopPropagation(); unlinkVariant(camp.id, v.content_id); }} className="p-0.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors" title="紐づけ解除">
                                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                             </button>
                                           </div>
