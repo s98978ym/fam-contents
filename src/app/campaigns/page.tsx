@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { sampleCampaigns, sampleVariants } from "@/lib/sample_data";
 import type { ChannelVariant, Campaign } from "@/types/content_package";
+import { useTeam } from "@/contexts/team-context";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -427,14 +428,16 @@ export default function CampaignsPage() {
     return map;
   }, [campaigns]);
 
+  const { currentMembers: teamMembers } = useTeam();
+
   const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
   useEffect(() => {
     try { setRegisteredMembers(JSON.parse(localStorage.getItem("registered_members") ?? "[]")); } catch { /* */ }
   }, []);
 
   const allAssignees = useMemo(() =>
-    [...new Set([...registeredMembers, ...variants.map((v) => v.assignee).filter(Boolean) as string[]])].sort()
-  , [variants, registeredMembers]);
+    [...new Set([...teamMembers, ...registeredMembers, ...variants.map((v) => v.assignee).filter(Boolean) as string[]])].sort()
+  , [variants, registeredMembers, teamMembers]);
 
   function getVariantsForCampaign(contentIds: string[]) {
     return variants.filter((v) => contentIds.includes(v.content_id));

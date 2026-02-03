@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useTeam } from "@/contexts/team-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -393,7 +394,8 @@ export default function VariantDetailPage() {
 
   useEffect(() => { setRegisteredMembers(loadMembers()); }, []);
 
-  const allMembers = [...new Set([...registeredMembers, ...(variant?.assignee ? [variant.assignee] : [])])].sort();
+  const { currentMembers: teamMembers } = useTeam();
+  const allMembers = [...new Set([...teamMembers, ...registeredMembers, ...(variant?.assignee ? [variant.assignee] : [])])].sort();
 
   function handleAssigneeChange(newAssignee: string) {
     if (!variant) return;
