@@ -340,9 +340,10 @@ export default function CampaignsPage() {
   const [editingCampaign, setEditingCampaign] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const dragRef = useRef<{ variantId: string; timelineEl: HTMLElement; startX: number; tsMs: number; spanMs: number } | null>(null);
-  const [dragPct, setDragPct] = useState<{ id: string; pct: number } | null>(null);
+  const [dragPct, setDragPct] = useState<{ id: string; pct: number; dateLabel: string } | null>(null);
   const [dndVariant, setDndVariant] = useState<{ contentId: string; fromCampId: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [assigneeDropdown, setAssigneeDropdown] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2500); }, []);
 
@@ -379,6 +380,18 @@ export default function CampaignsPage() {
     }));
     const target = campaigns.find((c) => c.id === toCampId);
     showToast(`「${target?.name}」に移動しました`);
+  }
+
+  function updateVariantAssignee(variantId: string, assignee: string | undefined) {
+    setVariants((prev) => prev.map((v) => v.id === variantId ? { ...v, assignee } : v));
+    // Also persist to localStorage overrides
+    try {
+      const overrides = JSON.parse(localStorage.getItem("assignee_overrides") ?? "{}");
+      if (assignee) { overrides[variantId] = assignee; } else { delete overrides[variantId]; }
+      localStorage.setItem("assignee_overrides", JSON.stringify(overrides));
+    } catch { /* */ }
+    setAssigneeDropdown(null);
+    showToast(assignee ? `担当を「${assignee}」に変更しました` : "担当を解除しました");
   }
 
   const updateVariantDate = useCallback((variantId: string, newDate: Date) => {
@@ -472,7 +485,10 @@ export default function CampaignsPage() {
       if (!dragRef.current) return;
       const rect = dragRef.current.timelineEl.getBoundingClientRect();
       const pct = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
-      setDragPct({ id: variantId, pct });
+      const ms = dragRef.current.tsMs + (pct / 100) * dragRef.current.spanMs;
+      const d = new Date(ms);
+      const dateLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+      setDragPct({ id: variantId, pct, dateLabel });
     }
 
     function onUp(ev: MouseEvent) {
@@ -713,6 +729,13 @@ export default function CampaignsPage() {
                               const assignee = dot.variant.assignee;
                               return (
                                 <div key={di} className="absolute -translate-x-2.5" style={{ left: `${leftPct}%`, top: 0 }}>
+                                  {/* Date label while dragging */}
+                                  {isDragging && dragPct.dateLabel && (
+                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[11px] font-bold px-2 py-0.5 rounded shadow-lg whitespace-nowrap z-30 tabular-nums">
+                                      {dragPct.dateLabel}
+                                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                                    </div>
+                                  )}
                                   <button
                                     className={`w-6 h-6 rounded-full z-10 flex items-center justify-center transition-all ring-2 ring-white hover:ring-4 hover:scale-125 ${cfg.dot} shadow-sm ${isDragging ? "scale-150 ring-4 cursor-grabbing" : "cursor-grab hover:shadow-md"} relative top-0.5`}
                                     onClick={(e) => handleDotClick(e, dot)}
@@ -737,7 +760,7 @@ export default function CampaignsPage() {
                         </div>
                         {/* Expanded detail panel */}
                         {isActive && (
-                          <div className="ml-6 mr-2 my-1 rounded-lg border border-slate-200 bg-white overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                          <div className="ml-6 mr-2 my-1 rounded-lg border border-slate-200 bg-white overflow-hidden" onClick={(e) => { e.stopPropagation(); setAssigneeDropdown(null); }}>
                             {/* Header with edit/delete */}
                             <div className={`px-4 py-2 ${cfg.bg} border-b ${cfg.border} flex items-center justify-between`}>
                               <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -804,7 +827,50 @@ export default function CampaignsPage() {
                                             <span className="text-xs text-slate-600 truncate">{getVariantSummary(v) || "(内容なし)"}</span>
                                           </div>
                                           <div className="flex items-center gap-1.5 shrink-0">
-                                            {v.assignee && <AssigneeAvatar name={v.assignee} size="sm" />}
+                                            {/* Assignee avatar with dropdown */}
+                                            <div className="relative">
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); setAssigneeDropdown(assigneeDropdown === v.id ? null : v.id); }}
+                                                className="rounded-full hover:ring-2 hover:ring-indigo-300 transition-all"
+                                                title={v.assignee ? `担当: ${v.assignee}（クリックで変更）` : "担当者を割り当て"}
+                                              >
+                                                {v.assignee ? (
+                                                  <AssigneeAvatar name={v.assignee} size="sm" />
+                                                ) : (
+                                                  <span className="w-6 h-6 rounded-full inline-flex items-center justify-center bg-slate-200 text-slate-400 hover:bg-slate-300 transition-colors shrink-0">
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                                  </span>
+                                                )}
+                                              </button>
+                                              {assigneeDropdown === v.id && (
+                                                <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-40 max-h-48 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                                                  <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase">担当者を選択</div>
+                                                  {allAssignees.map((a) => (
+                                                    <button
+                                                      key={a}
+                                                      onClick={() => updateVariantAssignee(v.id, a)}
+                                                      className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-slate-50 transition-colors ${v.assignee === a ? "bg-indigo-50" : ""}`}
+                                                    >
+                                                      <AssigneeAvatar name={a} size="sm" />
+                                                      <span className="text-xs text-slate-700">{a}</span>
+                                                      {v.assignee === a && <svg className="w-3 h-3 text-indigo-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                    </button>
+                                                  ))}
+                                                  {v.assignee && (
+                                                    <>
+                                                      <div className="border-t border-slate-100 my-1" />
+                                                      <button
+                                                        onClick={() => updateVariantAssignee(v.id, undefined)}
+                                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-red-50 transition-colors text-red-500"
+                                                      >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                        <span className="text-xs">担当を解除</span>
+                                                      </button>
+                                                    </>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
                                             {v.scheduled_at && <span className="text-[10px] text-slate-400 tabular-nums">{new Date(v.scheduled_at).toLocaleDateString("ja-JP")}</span>}
                                             <button onClick={(e) => { e.stopPropagation(); unlinkVariant(camp.id, v.content_id); }} className="p-0.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors" title="紐づけ解除">
                                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
