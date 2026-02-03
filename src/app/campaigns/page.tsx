@@ -355,6 +355,7 @@ export default function CampaignsPage() {
     nextId.current++;
     const c: Campaign = { ...data, id: `camp_new_${nextId.current}` };
     setCampaigns((prev) => [...prev, c]);
+    if (currentTeamId) assignCampaign(c.id);
     setShowNewForm(false);
     showToast("キャンペーンを追加しました");
     return c;
@@ -418,17 +419,18 @@ export default function CampaignsPage() {
     return markers;
   }, [timelineStart, weeks, totalDays]);
 
+  const { currentMembers: teamMembers, visibleCampaignIds, assignCampaign, currentTeamId } = useTeam();
+
   const grouped = useMemo(() => {
     const map = new Map<Objective, Campaign[]>();
-    for (const c of campaigns) {
+    const filtered = visibleCampaignIds ? campaigns.filter((c) => visibleCampaignIds.has(c.id)) : campaigns;
+    for (const c of filtered) {
       const obj = c.objective as Objective;
       if (!map.has(obj)) map.set(obj, []);
       map.get(obj)!.push(c);
     }
     return map;
-  }, [campaigns]);
-
-  const { currentMembers: teamMembers } = useTeam();
+  }, [campaigns, visibleCampaignIds]);
 
   const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
   useEffect(() => {
