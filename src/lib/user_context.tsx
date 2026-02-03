@@ -24,21 +24,13 @@ interface UserContextValue {
 
 function getAvailableUsers(): string[] {
   const set = new Set<string>();
+  // Only include users who have content/variants assigned (not just reviewers)
   for (const v of sampleVariants) {
     if (v.assignee) set.add(v.assignee);
   }
   for (const c of sampleContents) {
     if (c.created_by && !c.created_by.startsWith("planner_")) {
       set.add(c.created_by);
-    }
-  }
-  // Extract name part from reviewer (e.g., "管理栄養士 田中" -> "田中")
-  for (const r of sampleReviews) {
-    if (r.reviewer) {
-      const parts = r.reviewer.split(" ");
-      if (parts.length > 1) {
-        set.add(parts[parts.length - 1]);
-      }
     }
   }
   return Array.from(set).sort();
