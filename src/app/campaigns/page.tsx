@@ -340,7 +340,7 @@ export default function CampaignsPage() {
   const [editingCampaign, setEditingCampaign] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const dragRef = useRef<{ variantId: string; timelineEl: HTMLElement; startX: number; tsMs: number; spanMs: number } | null>(null);
-  const [dragPct, setDragPct] = useState<{ id: string; pct: number } | null>(null);
+  const [dragPct, setDragPct] = useState<{ id: string; pct: number; dateLabel: string } | null>(null);
   const [dndVariant, setDndVariant] = useState<{ contentId: string; fromCampId: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
@@ -472,7 +472,10 @@ export default function CampaignsPage() {
       if (!dragRef.current) return;
       const rect = dragRef.current.timelineEl.getBoundingClientRect();
       const pct = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
-      setDragPct({ id: variantId, pct });
+      const ms = dragRef.current.tsMs + (pct / 100) * dragRef.current.spanMs;
+      const d = new Date(ms);
+      const dateLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+      setDragPct({ id: variantId, pct, dateLabel });
     }
 
     function onUp(ev: MouseEvent) {
@@ -713,6 +716,13 @@ export default function CampaignsPage() {
                               const assignee = dot.variant.assignee;
                               return (
                                 <div key={di} className="absolute -translate-x-2.5" style={{ left: `${leftPct}%`, top: 0 }}>
+                                  {/* Date label while dragging */}
+                                  {isDragging && dragPct.dateLabel && (
+                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[11px] font-bold px-2 py-0.5 rounded shadow-lg whitespace-nowrap z-30 tabular-nums">
+                                      {dragPct.dateLabel}
+                                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                                    </div>
+                                  )}
                                   <button
                                     className={`w-6 h-6 rounded-full z-10 flex items-center justify-center transition-all ring-2 ring-white hover:ring-4 hover:scale-125 ${cfg.dot} shadow-sm ${isDragging ? "scale-150 ring-4 cursor-grabbing" : "cursor-grab hover:shadow-md"} relative top-0.5`}
                                     onClick={(e) => handleDotClick(e, dot)}
