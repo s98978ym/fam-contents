@@ -344,6 +344,7 @@ export default function CampaignsPage() {
   const [dndVariant, setDndVariant] = useState<{ contentId: string; fromCampId: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [assigneeDropdown, setAssigneeDropdown] = useState<string | null>(null);
+  const [assigneeDdPos, setAssigneeDdPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
 
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2500); }, []);
 
@@ -530,6 +531,46 @@ export default function CampaignsPage() {
 
       {/* Toast */}
       {toast && <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium">{toast}</div>}
+
+      {/* Assignee dropdown portal (fixed to avoid overflow clip) */}
+      {assigneeDropdown && (() => {
+        const ddVariant = variants.find((vv) => vv.id === assigneeDropdown);
+        if (!ddVariant) return null;
+        return (
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => setAssigneeDropdown(null)} />
+            <div
+              className="fixed z-[61] bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-44 max-h-56 overflow-y-auto"
+              style={{ top: assigneeDdPos.top, right: assigneeDdPos.right }}
+            >
+              <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase">担当者を選択</div>
+              {allAssignees.map((a) => (
+                <button
+                  key={a}
+                  onClick={() => updateVariantAssignee(ddVariant.id, a)}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-slate-50 transition-colors ${ddVariant.assignee === a ? "bg-indigo-50" : ""}`}
+                >
+                  <AssigneeAvatar name={a} size="sm" />
+                  <span className="text-xs text-slate-700">{a}</span>
+                  {ddVariant.assignee === a && <svg className="w-3 h-3 text-indigo-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                </button>
+              ))}
+              {ddVariant.assignee && (
+                <>
+                  <div className="border-t border-slate-100 my-1" />
+                  <button
+                    onClick={() => updateVariantAssignee(ddVariant.id, undefined)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-red-50 transition-colors text-red-500"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <span className="text-xs">担当を解除</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        );
+      })()}
 
       {/* Drag overlay - shows during D&D with drop zone hints */}
       {dndVariant && (
@@ -827,50 +868,26 @@ export default function CampaignsPage() {
                                             <span className="text-xs text-slate-600 truncate">{getVariantSummary(v) || "(内容なし)"}</span>
                                           </div>
                                           <div className="flex items-center gap-1.5 shrink-0">
-                                            {/* Assignee avatar with dropdown */}
-                                            <div className="relative">
-                                              <button
-                                                onClick={(e) => { e.stopPropagation(); setAssigneeDropdown(assigneeDropdown === v.id ? null : v.id); }}
-                                                className="rounded-full hover:ring-2 hover:ring-indigo-300 transition-all"
-                                                title={v.assignee ? `担当: ${v.assignee}（クリックで変更）` : "担当者を割り当て"}
-                                              >
-                                                {v.assignee ? (
-                                                  <AssigneeAvatar name={v.assignee} size="sm" />
-                                                ) : (
-                                                  <span className="w-6 h-6 rounded-full inline-flex items-center justify-center bg-slate-200 text-slate-400 hover:bg-slate-300 transition-colors shrink-0">
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                                  </span>
-                                                )}
-                                              </button>
-                                              {assigneeDropdown === v.id && (
-                                                <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-40 max-h-48 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                                                  <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase">担当者を選択</div>
-                                                  {allAssignees.map((a) => (
-                                                    <button
-                                                      key={a}
-                                                      onClick={() => updateVariantAssignee(v.id, a)}
-                                                      className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-slate-50 transition-colors ${v.assignee === a ? "bg-indigo-50" : ""}`}
-                                                    >
-                                                      <AssigneeAvatar name={a} size="sm" />
-                                                      <span className="text-xs text-slate-700">{a}</span>
-                                                      {v.assignee === a && <svg className="w-3 h-3 text-indigo-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                                    </button>
-                                                  ))}
-                                                  {v.assignee && (
-                                                    <>
-                                                      <div className="border-t border-slate-100 my-1" />
-                                                      <button
-                                                        onClick={() => updateVariantAssignee(v.id, undefined)}
-                                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-red-50 transition-colors text-red-500"
-                                                      >
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                                        <span className="text-xs">担当を解除</span>
-                                                      </button>
-                                                    </>
-                                                  )}
-                                                </div>
+                                            {/* Assignee avatar - click to open dropdown */}
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (assigneeDropdown === v.id) { setAssigneeDropdown(null); return; }
+                                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                setAssigneeDdPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                                                setAssigneeDropdown(v.id);
+                                              }}
+                                              className="rounded-full hover:ring-2 hover:ring-indigo-300 transition-all"
+                                              title={v.assignee ? `担当: ${v.assignee}（クリックで変更）` : "担当者を割り当て"}
+                                            >
+                                              {v.assignee ? (
+                                                <AssigneeAvatar name={v.assignee} size="sm" />
+                                              ) : (
+                                                <span className="w-6 h-6 rounded-full inline-flex items-center justify-center bg-slate-200 text-slate-400 hover:bg-slate-300 transition-colors shrink-0">
+                                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                                </span>
                                               )}
-                                            </div>
+                                            </button>
                                             {v.scheduled_at && <span className="text-[10px] text-slate-400 tabular-nums">{new Date(v.scheduled_at).toLocaleDateString("ja-JP")}</span>}
                                             <button onClick={(e) => { e.stopPropagation(); unlinkVariant(camp.id, v.content_id); }} className="p-0.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors" title="紐づけ解除">
                                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
