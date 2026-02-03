@@ -17,6 +17,7 @@ interface Review {
   comment: string;
   labels: string[];
   created_at: string;
+  reply_to?: string;
 }
 
 interface Content {
@@ -80,23 +81,118 @@ function isReviewDecision(decision: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Message Component
+// ---------------------------------------------------------------------------
+
+function Message({
+  review,
+  parentReview,
+  isHighlighted,
+  onReply,
+  msgRef,
+}: {
+  review: Review;
+  parentReview?: Review;
+  isHighlighted: boolean;
+  onReply: (review: Review) => void;
+  msgRef: (el: HTMLDivElement | null) => void;
+}) {
+  const cfg = DECISION_CONFIG[review.decision] ?? DECISION_CONFIG.comment;
+
+  return (
+    <div
+      id={review.id}
+      ref={msgRef}
+      className={`flex gap-2 transition-all duration-700 ${
+        isHighlighted ? "ring-2 ring-blue-400 rounded-lg bg-blue-50 p-2 -m-2" : ""
+      }`}
+    >
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full ${avatarColor(review.reviewer)} flex items-center justify-center text-white text-xs font-bold`}>
+        {review.reviewer.slice(-2)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="text-sm font-medium text-gray-800">{review.reviewer}</span>
+          <span className="text-xs text-gray-400">{ROLE_LABEL[review.role] ?? review.role}</span>
+          <span className="text-xs text-gray-300">{formatTime(review.created_at)}</span>
+        </div>
+        <div className="bg-white rounded-xl rounded-tl-sm border border-gray-200 px-3 py-2 shadow-sm">
+          {/* Quote of parent message */}
+          {parentReview && (
+            <div className="mb-2 px-2 py-1.5 bg-gray-50 border-l-2 border-gray-300 rounded text-xs">
+              <div className="flex items-center gap-1 text-gray-400 mb-0.5">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                <span className="font-medium">{parentReview.reviewer}</span>
+                <span>への返信</span>
+              </div>
+              <p className="text-gray-500 line-clamp-2">{parentReview.comment}</p>
+            </div>
+          )}
+
+          {isReviewDecision(review.decision) && (
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border mb-1.5 ${cfg.cls}`}>
+              <span>{cfg.icon}</span>
+              {cfg.label}
+            </span>
+          )}
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{review.comment}</p>
+          {review.labels.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {review.labels.map((l) => (
+                <span key={l} className="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-gray-100 text-gray-500">
+                  {l}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Reply button */}
+        <button
+          onClick={() => onReply(review)}
+          className="mt-1 text-xs text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+          返信
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Thread Component
 // ---------------------------------------------------------------------------
 
 function Thread({
   content,
   reviews,
+  reviewsMap,
   isActive,
   onSelect,
   highlightId,
   msgRefs,
+  replyTarget,
+  onReply,
+  onCancelReply,
+  onSubmitReply,
+  currentUser,
 }: {
   content: Content;
   reviews: Review[];
+  reviewsMap: Record<string, Review>;
   isActive: boolean;
   onSelect: () => void;
   highlightId: string | null;
   msgRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+  replyTarget: Review | null;
+  onReply: (review: Review) => void;
+  onCancelReply: () => void;
+  onSubmitReply: (data: { content_id: string; reviewer: string; role: string; decision: string; comment: string; labels: string[]; reply_to?: string }) => Promise<void>;
+  currentUser: string | null;
 }) {
   const latestReview = reviews[reviews.length - 1];
   const reviewCount = reviews.filter((r) => isReviewDecision(r.decision)).length;
@@ -178,55 +274,31 @@ function Thread({
       {isActive && (
         <div className="border-t border-gray-100">
           {/* Messages */}
-          <div className="p-4 space-y-3 max-h-80 overflow-y-auto bg-gray-50/50">
+          <div className="p-4 space-y-4 max-h-96 overflow-y-auto bg-gray-50/50">
             {reviews.length === 0 ? (
               <p className="text-center text-sm text-gray-400 py-4">まだコメントがありません</p>
             ) : (
-              reviews.map((r) => {
-                const cfg = DECISION_CONFIG[r.decision] ?? DECISION_CONFIG.comment;
-                const isHL = highlightId === r.id;
-                return (
-                  <div
-                    key={r.id}
-                    id={r.id}
-                    ref={(el) => { msgRefs.current[r.id] = el; }}
-                    className={`flex gap-2 transition-all duration-700 ${
-                      isHL ? "ring-2 ring-blue-400 rounded-lg bg-blue-50 p-2 -m-2" : ""
-                    }`}
-                  >
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full ${avatarColor(r.reviewer)} flex items-center justify-center text-white text-xs font-bold`}>
-                      {r.reviewer.slice(-2)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-medium text-gray-800">{r.reviewer}</span>
-                        <span className="text-xs text-gray-400">{ROLE_LABEL[r.role] ?? r.role}</span>
-                        <span className="text-xs text-gray-300">{formatTime(r.created_at)}</span>
-                      </div>
-                      <div className="bg-white rounded-xl rounded-tl-sm border border-gray-200 px-3 py-2 shadow-sm">
-                        {isReviewDecision(r.decision) && (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border mb-1.5 ${cfg.cls}`}>
-                            <span>{cfg.icon}</span>
-                            {cfg.label}
-                          </span>
-                        )}
-                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{r.comment}</p>
-                        {r.labels.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {r.labels.map((l) => (
-                              <span key={l} className="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-gray-100 text-gray-500">
-                                {l}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+              reviews.map((r) => (
+                <Message
+                  key={r.id}
+                  review={r}
+                  parentReview={r.reply_to ? reviewsMap[r.reply_to] : undefined}
+                  isHighlighted={highlightId === r.id}
+                  onReply={onReply}
+                  msgRef={(el) => { msgRefs.current[r.id] = el; }}
+                />
+              ))
             )}
           </div>
+
+          {/* Reply Form */}
+          <ReplyForm
+            contentId={content.content_id}
+            replyTarget={replyTarget}
+            currentUser={currentUser}
+            onSubmit={onSubmitReply}
+            onCancelReply={onCancelReply}
+          />
         </div>
       )}
     </div>
@@ -239,16 +311,16 @@ function Thread({
 
 function ReplyForm({
   contentId,
-  contentTitle,
+  replyTarget,
   currentUser,
   onSubmit,
-  onCancel,
+  onCancelReply,
 }: {
   contentId: string;
-  contentTitle: string;
+  replyTarget: Review | null;
   currentUser: string | null;
-  onSubmit: (data: { content_id: string; reviewer: string; role: string; decision: string; comment: string; labels: string[] }) => Promise<void>;
-  onCancel: () => void;
+  onSubmit: (data: { content_id: string; reviewer: string; role: string; decision: string; comment: string; labels: string[]; reply_to?: string }) => Promise<void>;
+  onCancelReply: () => void;
 }) {
   const [form, setForm] = useState({
     reviewer: currentUser ?? "",
@@ -261,9 +333,19 @@ function ReplyForm({
   const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Update reviewer when currentUser changes
   useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
+    if (currentUser && !form.reviewer) {
+      setForm((prev) => ({ ...prev, reviewer: currentUser }));
+    }
+  }, [currentUser, form.reviewer]);
+
+  // Focus textarea when replyTarget changes
+  useEffect(() => {
+    if (replyTarget) {
+      textareaRef.current?.focus();
+    }
+  }, [replyTarget]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -276,6 +358,7 @@ function ReplyForm({
       decision: isReview ? form.decision : "comment",
       comment: form.comment,
       labels: form.labels ? form.labels.split(",").map((s) => s.trim()) : [],
+      reply_to: replyTarget?.id,
     });
     setSubmitting(false);
     setForm({ ...form, comment: "", labels: "" });
@@ -283,16 +366,27 @@ function ReplyForm({
 
   return (
     <div className="border-t border-gray-200 bg-white p-4 rounded-b-xl">
-      <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-        </svg>
-        <span className="font-medium text-gray-700">{contentTitle}</span>
-        <span>に返信</span>
-        <button onClick={onCancel} className="ml-auto text-gray-400 hover:text-gray-600">
-          キャンセル
-        </button>
-      </div>
+      {/* Reply target indicator */}
+      {replyTarget && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <span className="text-xs text-blue-700 font-medium">{replyTarget.reviewer}</span>
+            <span className="text-xs text-blue-500 ml-1">への返信:</span>
+            <p className="text-xs text-blue-600 truncate">{replyTarget.comment}</p>
+          </div>
+          <button
+            onClick={onCancelReply}
+            className="text-blue-400 hover:text-blue-600 p-1"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         {/* Mode toggle + user info */}
@@ -362,7 +456,7 @@ function ReplyForm({
             <textarea
               ref={textareaRef}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-400"
-              placeholder={isReview ? "レビューコメントを入力..." : "コメントを入力..."}
+              placeholder={replyTarget ? `${replyTarget.reviewer}に返信...` : isReview ? "レビューコメントを入力..." : "コメントを入力..."}
               rows={2}
               value={form.comment}
               onChange={(e) => setForm({ ...form, comment: e.target.value })}
@@ -408,7 +502,7 @@ export default function ReviewsPage() {
 
   // UI state
   const [activeThread, setActiveThread] = useState<string | null>(null);
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<Review | null>(null);
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [showEmpty, setShowEmpty] = useState(false);
 
@@ -423,6 +517,15 @@ export default function ReviewsPage() {
       setFilterAssignee(currentUser);
     }
   }, [isLoaded, currentUser, filterAssignee]);
+
+  // Create reviews map for quick lookup
+  const reviewsMap = useMemo(() => {
+    const map: Record<string, Review> = {};
+    for (const r of reviews) {
+      map[r.id] = r;
+    }
+    return map;
+  }, [reviews]);
 
   // Handle hash navigation
   useEffect(() => {
@@ -481,7 +584,7 @@ export default function ReviewsPage() {
     return Array.from(s).sort();
   }, [contents]);
 
-  async function handleReply(data: { content_id: string; reviewer: string; role: string; decision: string; comment: string; labels: string[] }) {
+  async function handleReply(data: { content_id: string; reviewer: string; role: string; decision: string; comment: string; labels: string[]; reply_to?: string }) {
     const res = await fetch("/api/reviews", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -490,7 +593,7 @@ export default function ReviewsPage() {
     if (res.ok) {
       const review = await res.json();
       setReviews((prev) => [...prev, review]);
-      setReplyingTo(null);
+      setReplyTarget(null);
     }
   }
 
@@ -571,46 +674,32 @@ export default function ReviewsPage() {
           {filteredContents.map((content) => {
             const isActive = activeThread === content.content_id;
             const contentReviews = reviewsByContent[content.content_id] ?? [];
-            return (
-              <div key={content.content_id}>
-                <Thread
-                  content={content}
-                  reviews={contentReviews}
-                  isActive={isActive}
-                  onSelect={() => {
-                    if (isActive) {
-                      setActiveThread(null);
-                      setReplyingTo(null);
-                    } else {
-                      setActiveThread(content.content_id);
-                    }
-                  }}
-                  highlightId={highlightId}
-                  msgRefs={msgRefs}
-                />
+            const activeReplyTarget = isActive ? replyTarget : null;
 
-                {/* Reply form or Reply button */}
-                {isActive && (
-                  replyingTo === content.content_id ? (
-                    <ReplyForm
-                      contentId={content.content_id}
-                      contentTitle={content.title}
-                      currentUser={currentUser}
-                      onSubmit={handleReply}
-                      onCancel={() => setReplyingTo(null)}
-                    />
-                  ) : (
-                    <div className="flex justify-center -mt-2">
-                      <button
-                        onClick={() => setReplyingTo(content.content_id)}
-                        className="bg-white border border-gray-200 rounded-full px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm"
-                      >
-                        + 返信する
-                      </button>
-                    </div>
-                  )
-                )}
-              </div>
+            return (
+              <Thread
+                key={content.content_id}
+                content={content}
+                reviews={contentReviews}
+                reviewsMap={reviewsMap}
+                isActive={isActive}
+                onSelect={() => {
+                  if (isActive) {
+                    setActiveThread(null);
+                    setReplyTarget(null);
+                  } else {
+                    setActiveThread(content.content_id);
+                    setReplyTarget(null);
+                  }
+                }}
+                highlightId={highlightId}
+                msgRefs={msgRefs}
+                replyTarget={activeReplyTarget}
+                onReply={(review) => setReplyTarget(review)}
+                onCancelReply={() => setReplyTarget(null)}
+                onSubmitReply={handleReply}
+                currentUser={currentUser}
+              />
             );
           })}
         </div>
