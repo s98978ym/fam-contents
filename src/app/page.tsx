@@ -44,17 +44,16 @@ const DECISION_BADGE: Record<string, { cls: string; label: string }> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract unique assignees from variants */
+/** Extract unique assignees from variants and content creators */
 function getAssignees(): string[] {
   const set = new Set<string>();
   for (const v of sampleVariants) {
     if (v.assignee) set.add(v.assignee);
   }
   for (const c of sampleContents) {
-    if (c.created_by) set.add(c.created_by);
-  }
-  for (const r of sampleReviews) {
-    if (r.reviewer) set.add(r.reviewer);
+    if (c.created_by && !c.created_by.startsWith("planner_")) {
+      set.add(c.created_by);
+    }
   }
   return Array.from(set).sort();
 }
