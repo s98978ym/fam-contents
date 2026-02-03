@@ -11,6 +11,10 @@ export interface Team {
   name: string;
   color: string;
   members: string[];
+  /** キャンペーンID一覧 */
+  campaign_ids: string[];
+  /** コンテンツID一覧 (content_id) */
+  content_ids: string[];
 }
 
 interface TeamContextValue {
@@ -23,10 +27,24 @@ interface TeamContextValue {
   addMember: (teamId: string, member: string) => void;
   removeMember: (teamId: string, member: string) => void;
   setCurrentTeamId: (id: string | null) => void;
-  /** All members across all teams (deduplicated) */
   allMembers: string[];
-  /** Members of the current team (or all if no team selected) */
   currentMembers: string[];
+  /** チームにキャンペーンを紐づけ */
+  assignCampaign: (campaignId: string, teamId?: string) => void;
+  /** チームからキャンペーンを外す */
+  unassignCampaign: (campaignId: string) => void;
+  /** チームにコンテンツを紐づけ */
+  assignContent: (contentId: string, teamId?: string) => void;
+  /** チームからコンテンツを外す */
+  unassignContent: (contentId: string) => void;
+  /** 現在のチームに属するキャンペーンIDセット (null=全表示) */
+  visibleCampaignIds: Set<string> | null;
+  /** 現在のチームに属するコンテンツIDセット (null=全表示) */
+  visibleContentIds: Set<string> | null;
+  /** あるキャンペーンが所属するチームを返す */
+  getTeamForCampaign: (campaignId: string) => Team | null;
+  /** あるコンテンツが所属するチームを返す */
+  getTeamForContent: (contentId: string) => Team | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +56,13 @@ const STORAGE_KEY_CURRENT = "fam_current_team";
 
 function loadTeams(): Team[] {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_TEAMS) ?? "[]");
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY_TEAMS) ?? "[]") as Team[];
+    // migrate: ensure campaign_ids and content_ids exist
+    return raw.map((t) => ({
+      ...t,
+      campaign_ids: t.campaign_ids ?? [],
+      content_ids: t.content_ids ?? [],
+    }));
   } catch {
     return [];
   }
@@ -83,14 +107,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const [currentTeamId, setCurrentTeamIdRaw] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate from localStorage
   useEffect(() => {
     setTeams(loadTeams());
     setCurrentTeamIdRaw(loadCurrentTeamId());
     setHydrated(true);
   }, []);
 
-  // Persist teams
   useEffect(() => {
     if (hydrated) saveTeams(teams);
   }, [teams, hydrated]);
@@ -105,7 +127,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   let nextId = 1;
   const addTeam = useCallback((name: string, color?: string): Team => {
     const id = `team_${Date.now()}_${nextId++}`;
-    const t: Team = { id, name, color: color ?? nextColor(), members: [] };
+    const t: Team = { id, name, color: color ?? nextColor(), members: [], campaign_ids: [], content_ids: [] };
     setTeams((prev) => [...prev, t]);
     return t;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,10 +154,68 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     ));
   }, []);
 
+  // --- Resource assignment ---
+  const assignCampaign = useCallback((campaignId: string, teamId?: string) => {
+    const tid = teamId ?? currentTeamId;
+    if (!tid) return;
+    setTeams((prev) => prev.map((t) => {
+      // Remove from other teams first
+      if (t.id !== tid && t.campaign_ids.includes(campaignId)) {
+        return { ...t, campaign_ids: t.campaign_ids.filter((c) => c !== campaignId) };
+      }
+      if (t.id === tid && !t.campaign_ids.includes(campaignId)) {
+        return { ...t, campaign_ids: [...t.campaign_ids, campaignId] };
+      }
+      return t;
+    }));
+  }, [currentTeamId]);
+
+  const unassignCampaign = useCallback((campaignId: string) => {
+    setTeams((prev) => prev.map((t) =>
+      t.campaign_ids.includes(campaignId)
+        ? { ...t, campaign_ids: t.campaign_ids.filter((c) => c !== campaignId) }
+        : t
+    ));
+  }, []);
+
+  const assignContent = useCallback((contentId: string, teamId?: string) => {
+    const tid = teamId ?? currentTeamId;
+    if (!tid) return;
+    setTeams((prev) => prev.map((t) => {
+      if (t.id !== tid && t.content_ids.includes(contentId)) {
+        return { ...t, content_ids: t.content_ids.filter((c) => c !== contentId) };
+      }
+      if (t.id === tid && !t.content_ids.includes(contentId)) {
+        return { ...t, content_ids: [...t.content_ids, contentId] };
+      }
+      return t;
+    }));
+  }, [currentTeamId]);
+
+  const unassignContent = useCallback((contentId: string) => {
+    setTeams((prev) => prev.map((t) =>
+      t.content_ids.includes(contentId)
+        ? { ...t, content_ids: t.content_ids.filter((c) => c !== contentId) }
+        : t
+    ));
+  }, []);
+
+  // Visible IDs based on current team
+  const visibleCampaignIds = currentTeam ? new Set(currentTeam.campaign_ids) : null;
+  const visibleContentIds = currentTeam ? new Set(currentTeam.content_ids) : null;
+
+  const getTeamForCampaign = useCallback((campaignId: string): Team | null => {
+    return teams.find((t) => t.campaign_ids.includes(campaignId)) ?? null;
+  }, [teams]);
+
+  const getTeamForContent = useCallback((contentId: string): Team | null => {
+    return teams.find((t) => t.content_ids.includes(contentId)) ?? null;
+  }, [teams]);
+
   const allMembers = [...new Set(teams.flatMap((t) => t.members))].sort();
   const currentMembers = currentTeam ? [...currentTeam.members].sort() : allMembers;
 
-  // Also sync to registered_members for backward compat
+  // Sync to registered_members for backward compat
   useEffect(() => {
     if (hydrated && allMembers.length > 0) {
       try {
@@ -153,6 +233,10 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       addMember, removeMember,
       setCurrentTeamId,
       allMembers, currentMembers,
+      assignCampaign, unassignCampaign,
+      assignContent, unassignContent,
+      visibleCampaignIds, visibleContentIds,
+      getTeamForCampaign, getTeamForContent,
     }}>
       {children}
     </TeamContext.Provider>
