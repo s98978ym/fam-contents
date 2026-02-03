@@ -27,6 +27,11 @@ interface Content {
   status: string;
 }
 
+interface ReviewNode {
+  review: Review;
+  replies: ReviewNode[];
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -80,85 +85,133 @@ function isReviewDecision(decision: string) {
   return decision === "approved" || decision === "rejected" || decision === "revision_requested";
 }
 
+// Build tree structure from flat reviews
+function buildReviewTree(reviews: Review[]): ReviewNode[] {
+  const nodeMap: Record<string, ReviewNode> = {};
+  const roots: ReviewNode[] = [];
+
+  // Create nodes for all reviews
+  for (const review of reviews) {
+    nodeMap[review.id] = { review, replies: [] };
+  }
+
+  // Build tree structure
+  for (const review of reviews) {
+    const node = nodeMap[review.id];
+    if (review.reply_to && nodeMap[review.reply_to]) {
+      nodeMap[review.reply_to].replies.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  // Sort roots and replies by created_at
+  const sortByDate = (a: ReviewNode, b: ReviewNode) =>
+    (a.review.created_at ?? "").localeCompare(b.review.created_at ?? "");
+
+  roots.sort(sortByDate);
+  for (const node of Object.values(nodeMap)) {
+    node.replies.sort(sortByDate);
+  }
+
+  return roots;
+}
+
 // ---------------------------------------------------------------------------
-// Message Component
+// Message Component (supports nesting)
 // ---------------------------------------------------------------------------
 
 function Message({
-  review,
-  parentReview,
+  node,
+  depth,
   isHighlighted,
+  highlightId,
   onReply,
-  msgRef,
+  msgRefs,
 }: {
-  review: Review;
-  parentReview?: Review;
+  node: ReviewNode;
+  depth: number;
   isHighlighted: boolean;
+  highlightId: string | null;
   onReply: (review: Review) => void;
-  msgRef: (el: HTMLDivElement | null) => void;
+  msgRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
 }) {
+  const review = node.review;
   const cfg = DECISION_CONFIG[review.decision] ?? DECISION_CONFIG.comment;
+  const hasReplies = node.replies.length > 0;
 
   return (
-    <div
-      id={review.id}
-      ref={msgRef}
-      className={`flex gap-2 transition-all duration-700 ${
-        isHighlighted ? "ring-2 ring-blue-400 rounded-lg bg-blue-50 p-2 -m-2" : ""
-      }`}
-    >
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full ${avatarColor(review.reviewer)} flex items-center justify-center text-white text-xs font-bold`}>
-        {review.reviewer.slice(-2)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-sm font-medium text-gray-800">{review.reviewer}</span>
-          <span className="text-xs text-gray-400">{ROLE_LABEL[review.role] ?? review.role}</span>
-          <span className="text-xs text-gray-300">{formatTime(review.created_at)}</span>
+    <div className="relative">
+      {/* Main message */}
+      <div
+        id={review.id}
+        ref={(el) => { msgRefs.current[review.id] = el; }}
+        className={`flex gap-2 transition-all duration-700 ${
+          isHighlighted ? "ring-2 ring-blue-400 rounded-lg bg-blue-50 p-2 -m-2" : ""
+        }`}
+      >
+        <div className="relative flex-shrink-0">
+          <div className={`w-8 h-8 rounded-full ${avatarColor(review.reviewer)} flex items-center justify-center text-white text-xs font-bold`}>
+            {review.reviewer.slice(-2)}
+          </div>
+          {/* Vertical line connecting to replies */}
+          {hasReplies && (
+            <div className="absolute left-1/2 top-8 bottom-0 w-0.5 bg-gray-200 -translate-x-1/2" style={{ height: 'calc(100% + 8px)' }} />
+          )}
         </div>
-        <div className="bg-white rounded-xl rounded-tl-sm border border-gray-200 px-3 py-2 shadow-sm">
-          {/* Quote of parent message */}
-          {parentReview && (
-            <div className="mb-2 px-2 py-1.5 bg-gray-50 border-l-2 border-gray-300 rounded text-xs">
-              <div className="flex items-center gap-1 text-gray-400 mb-0.5">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                <span className="font-medium">{parentReview.reviewer}</span>
-                <span>への返信</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-sm font-medium text-gray-800">{review.reviewer}</span>
+            <span className="text-xs text-gray-400">{ROLE_LABEL[review.role] ?? review.role}</span>
+            <span className="text-xs text-gray-300">{formatTime(review.created_at)}</span>
+          </div>
+          <div className="bg-white rounded-xl rounded-tl-sm border border-gray-200 px-3 py-2 shadow-sm">
+            {isReviewDecision(review.decision) && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border mb-1.5 ${cfg.cls}`}>
+                <span>{cfg.icon}</span>
+                {cfg.label}
+              </span>
+            )}
+            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{review.comment}</p>
+            {review.labels.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {review.labels.map((l) => (
+                  <span key={l} className="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-gray-100 text-gray-500">
+                    {l}
+                  </span>
+                ))}
               </div>
-              <p className="text-gray-500 line-clamp-2">{parentReview.comment}</p>
-            </div>
-          )}
-
-          {isReviewDecision(review.decision) && (
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border mb-1.5 ${cfg.cls}`}>
-              <span>{cfg.icon}</span>
-              {cfg.label}
-            </span>
-          )}
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{review.comment}</p>
-          {review.labels.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {review.labels.map((l) => (
-                <span key={l} className="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-gray-100 text-gray-500">
-                  {l}
-                </span>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
+          {/* Reply button */}
+          <button
+            onClick={() => onReply(review)}
+            className="mt-1 text-xs text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+            返信
+          </button>
         </div>
-        {/* Reply button */}
-        <button
-          onClick={() => onReply(review)}
-          className="mt-1 text-xs text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-          </svg>
-          返信
-        </button>
       </div>
+
+      {/* Nested replies */}
+      {hasReplies && (
+        <div className="mt-3 ml-4 pl-4 border-l-2 border-gray-200 space-y-3">
+          {node.replies.map((replyNode) => (
+            <Message
+              key={replyNode.review.id}
+              node={replyNode}
+              depth={depth + 1}
+              isHighlighted={highlightId === replyNode.review.id}
+              highlightId={highlightId}
+              onReply={onReply}
+              msgRefs={msgRefs}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -170,7 +223,6 @@ function Message({
 function Thread({
   content,
   reviews,
-  reviewsMap,
   isActive,
   onSelect,
   highlightId,
@@ -183,7 +235,6 @@ function Thread({
 }: {
   content: Content;
   reviews: Review[];
-  reviewsMap: Record<string, Review>;
   isActive: boolean;
   onSelect: () => void;
   highlightId: string | null;
@@ -199,6 +250,9 @@ function Thread({
   const commentCount = reviews.filter((r) => !isReviewDecision(r.decision)).length;
   const hasApproval = reviews.some((r) => r.decision === "approved");
   const hasRevisionRequest = reviews.some((r) => r.decision === "revision_requested");
+
+  // Build tree structure for nested display
+  const reviewTree = useMemo(() => buildReviewTree(reviews), [reviews]);
 
   return (
     <div
@@ -274,18 +328,19 @@ function Thread({
       {isActive && (
         <div className="border-t border-gray-100">
           {/* Messages */}
-          <div className="p-4 space-y-4 max-h-96 overflow-y-auto bg-gray-50/50">
-            {reviews.length === 0 ? (
+          <div className="p-4 space-y-4 max-h-[500px] overflow-y-auto bg-gray-50/50">
+            {reviewTree.length === 0 ? (
               <p className="text-center text-sm text-gray-400 py-4">まだコメントがありません</p>
             ) : (
-              reviews.map((r) => (
+              reviewTree.map((node) => (
                 <Message
-                  key={r.id}
-                  review={r}
-                  parentReview={r.reply_to ? reviewsMap[r.reply_to] : undefined}
-                  isHighlighted={highlightId === r.id}
+                  key={node.review.id}
+                  node={node}
+                  depth={0}
+                  isHighlighted={highlightId === node.review.id}
+                  highlightId={highlightId}
                   onReply={onReply}
-                  msgRef={(el) => { msgRefs.current[r.id] = el; }}
+                  msgRefs={msgRefs}
                 />
               ))
             )}
@@ -518,15 +573,6 @@ export default function ReviewsPage() {
     }
   }, [isLoaded, currentUser, filterAssignee]);
 
-  // Create reviews map for quick lookup
-  const reviewsMap = useMemo(() => {
-    const map: Record<string, Review> = {};
-    for (const r of reviews) {
-      map[r.id] = r;
-    }
-    return map;
-  }, [reviews]);
-
   // Handle hash navigation
   useEffect(() => {
     if (reviews.length === 0 || contents.length === 0) return;
@@ -681,7 +727,6 @@ export default function ReviewsPage() {
                 key={content.content_id}
                 content={content}
                 reviews={contentReviews}
-                reviewsMap={reviewsMap}
                 isActive={isActive}
                 onSelect={() => {
                   if (isActive) {
