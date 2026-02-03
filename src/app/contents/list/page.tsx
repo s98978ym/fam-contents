@@ -380,13 +380,16 @@ export default function ContentsListPage() {
   }
 
   // --- Known assignees (team + registered + from data) ---
-  const { currentMembers: teamMembers } = useTeam();
+  const { currentMembers: teamMembers, visibleContentIds } = useTeam();
   const allAssignees = [...new Set([...teamMembers, ...registeredMembers, ...variants.map((v) => v.assignee).filter(Boolean) as string[]])].sort();
 
+  // --- Team filter ---
+  const teamFiltered = visibleContentIds ? variants.filter((v) => visibleContentIds.has(v.content_id)) : variants;
+
   // --- Filter logic ---
-  const activeVariants = variants.filter((v) => !archivedIds.has(v.id) && !trashedIds.has(v.id));
-  const archivedVariants = variants.filter((v) => archivedIds.has(v.id) && !trashedIds.has(v.id));
-  const trashedVariants = variants.filter((v) => trashedIds.has(v.id));
+  const activeVariants = teamFiltered.filter((v) => !archivedIds.has(v.id) && !trashedIds.has(v.id));
+  const archivedVariants = teamFiltered.filter((v) => archivedIds.has(v.id) && !trashedIds.has(v.id));
+  const trashedVariants = teamFiltered.filter((v) => trashedIds.has(v.id));
 
   const displayVariants = viewMode === "active" ? activeVariants : viewMode === "archived" ? archivedVariants : trashedVariants;
 
