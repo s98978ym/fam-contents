@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface Review {
   id: string;
@@ -15,6 +15,8 @@ interface Review {
 
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const [form, setForm] = useState({
     content_id: "",
     reviewer: "",
@@ -28,6 +30,20 @@ export default function ReviewsPage() {
   useEffect(() => {
     fetch("/api/reviews").then((r) => r.json()).then(setReviews);
   }, []);
+
+  // Scroll to hash target once reviews are loaded
+  useEffect(() => {
+    if (reviews.length === 0) return;
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    setHighlightId(hash);
+    const el = rowRefs.current[hash];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    const timer = setTimeout(() => setHighlightId(null), 3000);
+    return () => clearTimeout(timer);
+  }, [reviews]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -100,7 +116,14 @@ export default function ReviewsPage() {
           </thead>
           <tbody>
             {reviews.map((r) => (
-              <tr key={r.id} className="border-t border-gray-100">
+              <tr
+                key={r.id}
+                id={r.id}
+                ref={(el) => { rowRefs.current[r.id] = el; }}
+                className={`border-t border-gray-100 transition-colors duration-700 ${
+                  highlightId === r.id ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : ""
+                }`}
+              >
                 <td className="px-4 py-2 font-mono text-xs">{r.id}</td>
                 <td className="px-4 py-2 font-mono text-xs">{r.content_id}</td>
                 <td className="px-4 py-2">{r.reviewer}</td>
@@ -110,7 +133,7 @@ export default function ReviewsPage() {
                     {r.decision}
                   </span>
                 </td>
-                <td className="px-4 py-2 max-w-xs truncate">{r.comment}</td>
+                <td className="px-4 py-2 max-w-xs">{r.comment}</td>
                 <td className="px-4 py-2">
                   {r.labels.map((l) => (
                     <span key={l} className="inline-block mr-1 px-1.5 py-0.5 text-xs rounded bg-gray-100">{l}</span>

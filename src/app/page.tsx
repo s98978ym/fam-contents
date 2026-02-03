@@ -8,7 +8,7 @@ import {
   sampleVariants,
   sampleReviews,
 } from "@/lib/sample_data";
-import type { Campaign } from "@/types/content_package";
+import type { Campaign, ReviewRecord } from "@/types/content_package";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -79,6 +79,7 @@ function formatDate(iso: string) {
 export default function DashboardPage() {
   const assignees = useMemo(getAssignees, []);
   const [selectedUser, setSelectedUser] = useState<string>("all");
+  const [reviewSort, setReviewSort] = useState<{ key: keyof ReviewRecord; dir: "asc" | "desc" }>({ key: "created_at", dir: "desc" });
 
   // --- filtered data ---
   const activeCampaigns = useMemo(() => {
@@ -114,6 +115,26 @@ export default function DashboardPage() {
       (r) => r.reviewer.includes(selectedUser) || userContentIds.has(r.content_id)
     );
   }, [selectedUser]);
+
+  const sortedReviews = useMemo(() => {
+    const { key, dir } = reviewSort;
+    return [...filteredReviews].sort((a, b) => {
+      const va = String(a[key] ?? "");
+      const vb = String(b[key] ?? "");
+      return dir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+  }, [filteredReviews, reviewSort]);
+
+  function toggleReviewSort(key: keyof ReviewRecord) {
+    setReviewSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" }
+    );
+  }
+
+  function sortIcon(key: keyof ReviewRecord) {
+    if (reviewSort.key !== key) return "↕";
+    return reviewSort.dir === "asc" ? "↑" : "↓";
+  }
 
   // Stats
   const stats = [
@@ -285,20 +306,42 @@ export default function DashboardPage() {
 
       {/* Reviews */}
       <section className="mb-8">
-        <h3 className="text-lg font-semibold mb-3">レビュー / コメント</h3>
-        {filteredReviews.length === 0 ? (
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold">レビュー / コメント</h3>
+          <div className="flex items-center gap-1 text-xs">
+            {([
+              ["created_at", "日付"],
+              ["decision", "判定"],
+              ["reviewer", "レビュアー"],
+            ] as [keyof ReviewRecord, string][]).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => toggleReviewSort(key)}
+                className={`px-2 py-1 rounded transition-colors ${
+                  reviewSort.key === key
+                    ? "bg-blue-100 text-blue-700 font-medium"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                }`}
+              >
+                {label} {sortIcon(key)}
+              </button>
+            ))}
+          </div>
+        </div>
+        {sortedReviews.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-400">
             該当するレビューがありません
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredReviews.map((r) => {
+            {sortedReviews.map((r) => {
               const dec = DECISION_BADGE[r.decision] ?? DECISION_BADGE.approved;
               const content = sampleContents.find((c) => c.content_id === r.content_id);
               return (
-                <div
+                <Link
                   key={r.id}
-                  className="bg-white rounded-lg border border-gray-200 p-4 hover:border-gray-300 transition-colors"
+                  href={`/reviews#${r.id}`}
+                  className="block bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -330,7 +373,7 @@ export default function DashboardPage() {
                       </span>
                     ))}
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
