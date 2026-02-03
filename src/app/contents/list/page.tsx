@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useTeam } from "@/contexts/team-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -378,8 +379,9 @@ export default function ContentsListPage() {
     return STATUS_STYLE[v.status] ?? STATUS_STYLE.draft;
   }
 
-  // --- Known assignees (registered + from data) ---
-  const allAssignees = [...new Set([...registeredMembers, ...variants.map((v) => v.assignee).filter(Boolean) as string[]])].sort();
+  // --- Known assignees (team + registered + from data) ---
+  const { currentMembers: teamMembers } = useTeam();
+  const allAssignees = [...new Set([...teamMembers, ...registeredMembers, ...variants.map((v) => v.assignee).filter(Boolean) as string[]])].sort();
 
   // --- Filter logic ---
   const activeVariants = variants.filter((v) => !archivedIds.has(v.id) && !trashedIds.has(v.id));
