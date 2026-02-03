@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
+import { useCurrentUser } from "@/lib/user_context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -76,6 +77,7 @@ function isReviewDecision(decision: string) {
 // ---------------------------------------------------------------------------
 
 export default function ReviewsPage() {
+  const { currentUser, isLoaded } = useCurrentUser();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -86,6 +88,7 @@ export default function ReviewsPage() {
   const [tab, setTab] = useState<TabType>("all");
   const [filterReviewer, setFilterReviewer] = useState<string>("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
 
   // New message form
   const [form, setForm] = useState({
@@ -102,6 +105,17 @@ export default function ReviewsPage() {
     fetch("/api/reviews").then((r) => r.json()).then(setReviews);
     fetch("/api/contents").then((r) => r.json()).then(setContents);
   }, []);
+
+  // Apply defaults based on current user
+  useEffect(() => {
+    if (isLoaded && currentUser && !defaultsApplied) {
+      // Default to showing reviews for the user's assigned content
+      setFilterAssignee(currentUser);
+      // Pre-fill the reviewer name in the form
+      setForm((prev) => ({ ...prev, reviewer: currentUser }));
+      setDefaultsApplied(true);
+    }
+  }, [isLoaded, currentUser, defaultsApplied]);
 
   // Scroll to hash on load
   useEffect(() => {
@@ -216,6 +230,26 @@ export default function ReviewsPage() {
             ))}
           </div>
 
+          {/* Quick filter: My tasks */}
+          {currentUser && (
+            <button
+              onClick={() => {
+                if (filterAssignee === currentUser) {
+                  setFilterAssignee("all");
+                } else {
+                  setFilterAssignee(currentUser);
+                }
+              }}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                filterAssignee === currentUser
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"
+              }`}
+            >
+              自分の担当
+            </button>
+          )}
+
           {/* Reviewer filter */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-400">送信者:</span>
@@ -237,10 +271,13 @@ export default function ReviewsPage() {
             <select
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
-              className="text-sm border border-gray-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className={`text-sm border rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                filterAssignee === currentUser ? "border-blue-400 bg-blue-50" : "border-gray-200"
+              }`}
             >
               <option value="all">全員</option>
-              {assignees.map((name) => (
+              {currentUser && <option value={currentUser}>自分 ({currentUser})</option>}
+              {assignees.filter(n => n !== currentUser).map((name) => (
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>

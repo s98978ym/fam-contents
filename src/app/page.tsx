@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   sampleCampaigns,
@@ -8,6 +8,7 @@ import {
   sampleVariants,
   sampleReviews,
 } from "@/lib/sample_data";
+import { useCurrentUser } from "@/lib/user_context";
 import type { Campaign, ReviewRecord } from "@/types/content_package";
 
 // ---------------------------------------------------------------------------
@@ -77,9 +78,17 @@ function formatDate(iso: string) {
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
+  const { currentUser, isLoaded } = useCurrentUser();
   const assignees = useMemo(getAssignees, []);
   const [selectedUser, setSelectedUser] = useState<string>("all");
   const [reviewSort, setReviewSort] = useState<{ key: keyof ReviewRecord; dir: "asc" | "desc" }>({ key: "created_at", dir: "desc" });
+
+  // Default to current user's view when loaded
+  useEffect(() => {
+    if (isLoaded && currentUser) {
+      setSelectedUser(currentUser);
+    }
+  }, [isLoaded, currentUser]);
 
   // --- filtered data ---
   const activeCampaigns = useMemo(() => {
@@ -157,9 +166,26 @@ export default function DashboardPage() {
     <div>
       {/* Header with user filter */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">ダッシュボード</h2>
+        <div>
+          <h2 className="text-2xl font-bold">ダッシュボード</h2>
+          {currentUser && selectedUser === currentUser && (
+            <p className="text-sm text-gray-500 mt-0.5">{currentUser}さんの担当</p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-gray-100 rounded-lg p-0.5">
+            {currentUser && (
+              <button
+                onClick={() => setSelectedUser(currentUser)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  selectedUser === currentUser
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                自分
+              </button>
+            )}
             <button
               onClick={() => setSelectedUser("all")}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -170,7 +196,7 @@ export default function DashboardPage() {
             >
               全員
             </button>
-            {assignees.map((name) => (
+            {assignees.filter(name => name !== currentUser).map((name) => (
               <button
                 key={name}
                 onClick={() => setSelectedUser(name)}
