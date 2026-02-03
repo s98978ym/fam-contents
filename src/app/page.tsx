@@ -291,7 +291,7 @@ export default function DashboardPage() {
                     <tr key={c.content_id} className="border-t border-gray-100 hover:bg-gray-50">
                       <td className="px-4 py-2.5">
                         <Link
-                          href={`/contents/${c.content_id}`}
+                          href={`/contents/detail/${c.content_id}`}
                           className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                         >
                           {c.title}
