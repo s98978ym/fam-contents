@@ -77,7 +77,7 @@ function avatarColor(name: string): string {
 function AssigneeAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg" }) {
   const color = avatarColor(name);
   const initial = name.slice(0, 1);
-  const sizeMap = { sm: "w-6 h-6 text-[10px]", md: "w-7 h-7 text-[11px]", lg: "w-8 h-8 text-xs" };
+  const sizeMap = { sm: "w-6 h-6 text-xs", md: "w-7 h-7 text-sm", lg: "w-8 h-8 text-base" };
   return (
     <span className={`${color} ${sizeMap[size]} rounded-full inline-flex items-center justify-center text-white font-bold shrink-0 ring-1 ring-white`} title={name}>
       {initial}
@@ -723,7 +723,7 @@ export default function CampaignsPage() {
                                     title={`${chLabel} — ${getVariantSummary(dot.variant) || "(内容なし)"}${assignee ? `\n担当: ${assignee}` : ""}\nドラッグで日程変更`}
                                   >
                                     {assignee ? (
-                                      <span className={`w-full h-full rounded-full flex items-center justify-center text-[9px] font-bold text-white ${avatarColor(assignee)}`}>
+                                      <span className={`w-full h-full rounded-full flex items-center justify-center text-xs font-bold text-white ${avatarColor(assignee)}`}>
                                         {assignee.slice(0, 1)}
                                       </span>
                                     ) : (
