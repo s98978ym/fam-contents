@@ -1341,12 +1341,18 @@ export function StepSavePublish({
   onPublish,
   saving,
   saved,
+  availableUsers,
+  reviewRequestedTo,
+  onReviewRequestChange,
 }: {
   preview: PreviewData | null;
   onSave: () => void;
   onPublish: () => void;
   saving: boolean;
   saved: boolean;
+  availableUsers?: string[];
+  reviewRequestedTo?: string;
+  onReviewRequestChange?: (user: string) => void;
 }) {
   const [scheduledAt, setScheduledAt] = useState("");
 
@@ -1370,6 +1376,26 @@ export function StepSavePublish({
           <div><span className="text-xs text-gray-400">ボリューム</span><br /><span className="font-medium">{preview.settings.wordCount || "-"}</span></div>
         </div>
       </div>
+
+      {/* Review Request */}
+      {availableUsers && availableUsers.length > 0 && (
+        <div>
+          <Label hint="レビューを依頼するメンバーを選択（任意。事後設定も可能）">レビュー依頼先</Label>
+          <select
+            value={reviewRequestedTo ?? ""}
+            onChange={(e) => onReviewRequestChange?.(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full max-w-md"
+          >
+            <option value="">未設定</option>
+            {availableUsers.map((user) => (
+              <option key={user} value={user}>{user}</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">
+            依頼先を設定すると、保存後にその担当者のダッシュボードにレビュー依頼として表示されます。
+          </p>
+        </div>
+      )}
 
       {/* Schedule */}
       <div>
