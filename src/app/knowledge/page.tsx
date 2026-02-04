@@ -576,17 +576,10 @@ function NewPostForm({
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.changes_made) {
-          setProofreadText(data.proofread);
-          setSuggestedTags(data.suggested_tags || []);
-          setSuggestedCategory(data.suggested_category || null);
-          setShowComparison(true);
-        } else {
-          setProofreadText(null);
-          setSuggestedTags([]);
-          setSuggestedCategory(null);
-          setShowComparison(false);
-        }
+        setProofreadText(data.proofread ?? body);
+        setSuggestedTags(data.suggested_tags || []);
+        setSuggestedCategory(data.suggested_category || null);
+        setShowComparison(true);
       }
     } catch (e) {
       console.error("Proofreading failed:", e);
@@ -699,41 +692,48 @@ function NewPostForm({
               {/* 比較表示モード */}
               {showComparison && proofreadText ? (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* 元の文章 */}
-                    <div
-                      onClick={closeComparison}
-                      className="cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs font-medium text-gray-500">元の文章</span>
+                  {/* 文章比較 */}
+                  {proofreadText !== body ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* 元の文章 */}
+                      <div
+                        onClick={closeComparison}
+                        className="cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-medium text-gray-500">元の文章</span>
+                        </div>
+                        <div className="h-40 p-3 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap group-hover:border-gray-300 transition-colors">
+                          {body}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1 text-center group-hover:text-gray-500">クリックで元のまま編集を続ける</p>
                       </div>
-                      <div className="h-40 p-3 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap group-hover:border-gray-300 transition-colors">
-                        {body}
-                      </div>
-                      <p className="text-[10px] text-gray-400 mt-1 text-center group-hover:text-gray-500">クリックで元のまま編集を続ける</p>
-                    </div>
 
-                    {/* 校正後の文章 */}
-                    <div
-                      onClick={applyProofreadResult}
-                      className="cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs font-medium text-purple-600">校正後</span>
-                        <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
+                      {/* 校正後の文章 */}
+                      <div
+                        onClick={applyProofreadResult}
+                        className="cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-medium text-purple-600">校正後</span>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
+                        </div>
+                        <div className="h-40 p-3 border-2 border-purple-300 rounded-lg bg-purple-50 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100 transition-colors">
+                          {proofreadText}
+                        </div>
+                        <p className="text-[10px] text-purple-500 mt-1 text-center group-hover:text-purple-600">クリックですべて適用</p>
                       </div>
-                      <div className="h-40 p-3 border-2 border-purple-300 rounded-lg bg-purple-50 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100 transition-colors">
-                        {proofreadText}
-                      </div>
-                      <p className="text-[10px] text-purple-500 mt-1 text-center group-hover:text-purple-600">クリックで適用</p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <p className="text-xs text-gray-500">文章の修正はありません。以下のタグ・カテゴリ提案を確認してください。</p>
+                    </div>
+                  )}
 
                   {/* 自動付与されるタグ・カテゴリ */}
                   {(suggestedTags.length > 0 || suggestedCategory) && (
                     <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                      <p className="text-xs font-medium text-purple-700 mb-2">AIが提案する設定（適用時に反映）</p>
+                      <p className="text-xs font-medium text-purple-700 mb-2">AIが提案する設定</p>
                       {suggestedCategory && (
                         <div className="flex items-center gap-2 mb-2">
                           <span className="text-[11px] text-purple-600">カテゴリ:</span>
@@ -755,6 +755,23 @@ function NewPostForm({
                           ))}
                         </div>
                       )}
+
+                      <div className="flex items-center gap-3 mt-3 pt-2 border-t border-purple-200">
+                        <button
+                          type="button"
+                          onClick={applyProofreadResult}
+                          className="px-4 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                        >
+                          すべて適用
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeComparison}
+                          className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                          適用しない
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
