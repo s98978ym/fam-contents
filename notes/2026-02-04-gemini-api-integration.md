@@ -3,10 +3,10 @@
 ## 何をしたか
 
 ### Gemini API クライアント (`src/lib/gemini.ts`)
-- `https` モジュール + `https-proxy-agent` でREST直接呼び出し（SDKは不使用）
+- ネイティブ `fetch()` でREST呼び出し（SDK不使用、`https` モジュール不使用）
 - `generateText`, `generateJSON<T>` の汎用関数を提供
 - `isGeminiAvailable` フラグでAPI利用可否を判定
-- プロキシ対応: `HTTPS_PROXY` 環境変数があれば `HttpsProxyAgent` を使用
+- Vercelサーバーレス環境 + Node.js 18+ の両方で動作
 
 ### ナレッジ発展API (`/api/knowledge/proofread`)
 - 「校正」から「ナレッジ発展」にコンセプト変更
