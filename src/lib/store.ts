@@ -11,6 +11,8 @@ import type {
   ReviewRecord,
   PublishJob,
   MetricDaily,
+  KnowledgePost,
+  KnowledgeComment,
 } from "@/types/content_package";
 
 import {
@@ -20,6 +22,8 @@ import {
   sampleReviews,
   samplePublishJobs,
   sampleMetrics,
+  sampleKnowledgePosts,
+  sampleKnowledgeComments,
 } from "./sample_data";
 
 export interface PromptVersion {
@@ -51,6 +55,8 @@ const variants: ChannelVariant[] = [...sampleVariants];
 const reviews: ReviewRecord[] = [...sampleReviews];
 const publishJobs: PublishJob[] = [...samplePublishJobs];
 const metrics: MetricDaily[] = [...sampleMetrics];
+const knowledgePosts: KnowledgePost[] = [...sampleKnowledgePosts];
+const knowledgeComments: KnowledgeComment[] = [...sampleKnowledgeComments];
 const promptVersions: PromptVersion[] = [
   {
     id: "pv_001",
@@ -229,4 +235,74 @@ export const promptVersionStore = {
 // --- Audit Logs ---
 export const auditStore = {
   list: () => auditLogs,
+};
+
+// --- Knowledge Posts ---
+export const knowledgePostStore = {
+  list: () => knowledgePosts,
+  get: (id: string) => knowledgePosts.find((p) => p.id === id),
+  create: (data: Omit<KnowledgePost, "id" | "created_at" | "updated_at" | "likes" | "ai_categorized">) => {
+    const now = new Date().toISOString();
+    const p: KnowledgePost = {
+      ...data,
+      id: nextId("kp"),
+      likes: [],
+      ai_categorized: false,
+      created_at: now,
+      updated_at: now,
+    };
+    knowledgePosts.push(p);
+    addAudit("create", "knowledge_post", p.id, p.author, p.title);
+    return p;
+  },
+  update: (id: string, patch: Partial<KnowledgePost>) => {
+    const idx = knowledgePosts.findIndex((p) => p.id === id);
+    if (idx === -1) return null;
+    knowledgePosts[idx] = { ...knowledgePosts[idx], ...patch, updated_at: new Date().toISOString() };
+    addAudit("update", "knowledge_post", id, "system", JSON.stringify(patch));
+    return knowledgePosts[idx];
+  },
+  toggleLike: (id: string, user: string) => {
+    const idx = knowledgePosts.findIndex((p) => p.id === id);
+    if (idx === -1) return null;
+    const likes = [...knowledgePosts[idx].likes];
+    const likeIdx = likes.indexOf(user);
+    if (likeIdx === -1) {
+      likes.push(user);
+    } else {
+      likes.splice(likeIdx, 1);
+    }
+    knowledgePosts[idx] = { ...knowledgePosts[idx], likes, updated_at: new Date().toISOString() };
+    return knowledgePosts[idx];
+  },
+  delete: (id: string) => {
+    const idx = knowledgePosts.findIndex((p) => p.id === id);
+    if (idx === -1) return false;
+    knowledgePosts.splice(idx, 1);
+    addAudit("delete", "knowledge_post", id, "system", "deleted");
+    return true;
+  },
+};
+
+// --- Knowledge Comments ---
+export const knowledgeCommentStore = {
+  list: () => knowledgeComments,
+  listByPost: (postId: string) => knowledgeComments.filter((c) => c.post_id === postId),
+  create: (data: Omit<KnowledgeComment, "id" | "created_at">) => {
+    const c: KnowledgeComment = {
+      ...data,
+      id: nextId("kc"),
+      created_at: new Date().toISOString(),
+    };
+    knowledgeComments.push(c);
+    addAudit("create", "knowledge_comment", c.id, c.author, `on ${c.post_id}`);
+    return c;
+  },
+  delete: (id: string) => {
+    const idx = knowledgeComments.findIndex((c) => c.id === id);
+    if (idx === -1) return false;
+    knowledgeComments.splice(idx, 1);
+    addAudit("delete", "knowledge_comment", id, "system", "deleted");
+    return true;
+  },
 };

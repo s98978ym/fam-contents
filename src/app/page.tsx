@@ -152,7 +152,7 @@ export default function DashboardPage() {
   // Stats
   const stats = [
     { label: "キャンペーン", value: activeCampaigns.length, icon: "📊", href: "/campaigns", color: "blue" },
-    { label: "コンテンツ", value: activeContents.length, icon: "📝", href: "/contents", color: "purple" },
+    { label: "コンテンツ", value: activeContents.length, icon: "📝", href: "/contents/list", color: "purple" },
     { label: "レビュー依頼", value: reviewRequestsForMe.length, icon: "📩", href: "#review-requests", color: "pink", badge: newReviewRequestCount > 0 ? newReviewRequestCount : undefined },
     { label: "レビュー待ち", value: filteredReviews.filter((r) => r.decision === "revision_requested").length, icon: "👀", href: "/reviews", color: "orange" },
     { label: "承認済み", value: filteredReviews.filter((r) => r.decision === "approved").length, icon: "✅", href: "/reviews", color: "green" },
@@ -283,7 +283,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg border border-gray-200 h-full">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-semibold text-gray-800">アクティブコンテンツ</h3>
-              <Link href="/contents" className="text-xs text-blue-600 hover:underline">すべて見る</Link>
+              <Link href="/contents/list" className="text-xs text-blue-600 hover:underline">すべて見る</Link>
             </div>
             <div className="max-h-[500px] overflow-y-auto">
               {activeContents.length === 0 ? (
