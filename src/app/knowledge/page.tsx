@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useCurrentUser } from "@/lib/user_context";
 import type { KnowledgePost, KnowledgeComment, KnowledgeCategory } from "@/types/content_package";
 
@@ -8,15 +8,15 @@ import type { KnowledgePost, KnowledgeComment, KnowledgeCategory } from "@/types
 // Constants
 // ---------------------------------------------------------------------------
 
-const CATEGORY_LABELS: Record<KnowledgeCategory, { label: string; color: string; icon: string }> = {
-  tips: { label: "Tips", color: "bg-blue-100 text-blue-700", icon: "💡" },
-  howto: { label: "ハウツー", color: "bg-green-100 text-green-700", icon: "📖" },
-  tool: { label: "ツール", color: "bg-purple-100 text-purple-700", icon: "🔧" },
-  process: { label: "プロセス", color: "bg-orange-100 text-orange-700", icon: "⚙️" },
-  insight: { label: "インサイト", color: "bg-pink-100 text-pink-700", icon: "📊" },
-  resource: { label: "リソース", color: "bg-teal-100 text-teal-700", icon: "📁" },
-  announcement: { label: "お知らせ", color: "bg-yellow-100 text-yellow-700", icon: "📢" },
-  other: { label: "その他", color: "bg-gray-100 text-gray-700", icon: "📌" },
+const CATEGORY_CONFIG: Record<KnowledgeCategory, { label: string; color: string; bgColor: string; icon: string; description: string }> = {
+  tips: { label: "Tips", color: "text-blue-600", bgColor: "bg-blue-50 hover:bg-blue-100 border-blue-200", icon: "💡", description: "すぐに使える小技・コツ" },
+  howto: { label: "ハウツー", color: "text-green-600", bgColor: "bg-green-50 hover:bg-green-100 border-green-200", icon: "📖", description: "手順・やり方の解説" },
+  tool: { label: "ツール", color: "text-purple-600", bgColor: "bg-purple-50 hover:bg-purple-100 border-purple-200", icon: "🔧", description: "便利なツール紹介" },
+  process: { label: "プロセス", color: "text-orange-600", bgColor: "bg-orange-50 hover:bg-orange-100 border-orange-200", icon: "⚙️", description: "業務改善・効率化" },
+  insight: { label: "インサイト", color: "text-pink-600", bgColor: "bg-pink-50 hover:bg-pink-100 border-pink-200", icon: "📊", description: "分析結果・気づき" },
+  resource: { label: "リソース", color: "text-teal-600", bgColor: "bg-teal-50 hover:bg-teal-100 border-teal-200", icon: "📁", description: "テンプレート・資料" },
+  announcement: { label: "お知らせ", color: "text-yellow-600", bgColor: "bg-yellow-50 hover:bg-yellow-100 border-yellow-200", icon: "📢", description: "重要なお知らせ" },
+  other: { label: "その他", color: "text-gray-600", bgColor: "bg-gray-50 hover:bg-gray-100 border-gray-200", icon: "📌", description: "その他のナレッジ" },
 };
 
 const AVATAR_COLORS: Record<string, string> = {
@@ -27,8 +27,7 @@ const AVATAR_COLORS: Record<string, string> = {
   高橋: "bg-pink-500",
 };
 
-type SortOption = "newest" | "oldest" | "popular" | "comments";
-type ViewMode = "all" | "category";
+type TimePeriod = "all" | "today" | "week" | "month";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,6 +46,21 @@ function formatDate(iso: string) {
   if (hours < 24) return `${hours}時間前`;
   if (days < 7) return `${days}日前`;
   return date.toLocaleDateString("ja-JP");
+}
+
+function isWithinPeriod(dateStr: string, period: TimePeriod): boolean {
+  if (period === "all") return true;
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const days = diff / (1000 * 60 * 60 * 24);
+
+  switch (period) {
+    case "today": return days < 1;
+    case "week": return days < 7;
+    case "month": return days < 30;
+    default: return true;
+  }
 }
 
 function getInitials(name: string) {
@@ -75,29 +89,45 @@ function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg"
   );
 }
 
-function CategoryBadge({ category }: { category: KnowledgeCategory }) {
-  const { label, color, icon } = CATEGORY_LABELS[category];
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>
-      <span>{icon}</span>
-      {label}
-    </span>
-  );
-}
+// ---------------------------------------------------------------------------
+// Category Card Component
+// ---------------------------------------------------------------------------
 
-function TagList({ tags }: { tags: string[] }) {
-  if (tags.length === 0) return null;
+function CategoryCard({
+  category,
+  count,
+  recentPost,
+  isSelected,
+  onClick,
+}: {
+  category: KnowledgeCategory;
+  count: number;
+  recentPost?: KnowledgePost;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const config = CATEGORY_CONFIG[category];
+
   return (
-    <div className="flex flex-wrap gap-1.5 mt-2">
-      {tags.map((tag) => (
-        <span
-          key={tag}
-          className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
-        >
-          #{tag}
-        </span>
-      ))}
-    </div>
+    <button
+      onClick={onClick}
+      className={`text-left p-4 rounded-xl border-2 transition-all ${config.bgColor} ${
+        isSelected ? "ring-2 ring-offset-2 ring-blue-500 border-blue-400" : "border-transparent"
+      }`}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <span className="text-2xl">{config.icon}</span>
+        <span className={`text-lg font-bold ${config.color}`}>{count}</span>
+      </div>
+      <h3 className={`font-bold ${config.color}`}>{config.label}</h3>
+      <p className="text-xs text-gray-500 mt-0.5">{config.description}</p>
+      {recentPost && (
+        <div className="mt-3 pt-3 border-t border-gray-200/50">
+          <p className="text-xs text-gray-600 truncate">{recentPost.title}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{recentPost.author} • {formatDate(recentPost.created_at)}</p>
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -111,12 +141,16 @@ function PostCard({
   currentUser,
   onLike,
   onComment,
+  onTagClick,
+  compact = false,
 }: {
   post: KnowledgePost;
   comments: KnowledgeComment[];
   currentUser: string | null;
   onLike: (postId: string) => void;
   onComment: (postId: string, body: string) => void;
+  onTagClick: (tag: string) => void;
+  compact?: boolean;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState("");
@@ -124,6 +158,7 @@ function PostCard({
 
   const isLiked = currentUser ? post.likes.includes(currentUser) : false;
   const postComments = comments.filter((c) => c.post_id === post.id);
+  const config = CATEGORY_CONFIG[post.category];
 
   const handleSubmitComment = async () => {
     if (!newComment.trim() || submitting) return;
@@ -132,6 +167,26 @@ function PostCard({
     setNewComment("");
     setSubmitting(false);
   };
+
+  if (compact) {
+    return (
+      <div className="p-3 rounded-lg hover:bg-gray-50 transition-colors">
+        <div className="flex items-start gap-3">
+          <Avatar name={post.author} size="sm" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-800 truncate">{post.title}</p>
+            <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+              <span>{post.author}</span>
+              <span>•</span>
+              <span>{formatDate(post.created_at)}</span>
+              <span>•</span>
+              <span>❤️ {post.likes.length}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
@@ -148,17 +203,37 @@ function PostCard({
             )}
             <span className="text-xs text-gray-400">{formatDate(post.created_at)}</span>
           </div>
-          <CategoryBadge category={post.category} />
+          <button
+            onClick={() => onTagClick(`category:${post.category}`)}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${config.bgColor} ${config.color}`}
+          >
+            <span>{config.icon}</span>
+            {config.label}
+          </button>
         </div>
       </div>
 
       {/* Content */}
       <div className="mt-4">
         <h3 className="text-lg font-bold text-gray-900 mb-2">{post.title}</h3>
-        <div className="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed">
+        <div className="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed line-clamp-4">
           {post.body}
         </div>
-        <TagList tags={post.tags} />
+
+        {/* Tags */}
+        {post.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {post.tags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => onTagClick(tag)}
+                className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200 transition-colors"
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Images */}
         {post.images.length > 0 && (
@@ -173,14 +248,6 @@ function PostCard({
           </div>
         )}
       </div>
-
-      {/* AI Badge */}
-      {post.ai_categorized && (
-        <div className="mt-3 flex items-center gap-1 text-xs text-gray-400">
-          <span className="w-3 h-3 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full" />
-          AI自動分類
-        </div>
-      )}
 
       {/* Actions */}
       <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-4">
@@ -233,7 +300,6 @@ function PostCard({
             </div>
           ))}
 
-          {/* New Comment Input */}
           {currentUser && (
             <div className="flex gap-2 pt-2">
               <Avatar name={currentUser} size="sm" />
@@ -270,24 +336,23 @@ function NewPostForm({
   currentUser,
   onSubmit,
   onClose,
+  initialCategory,
 }: {
   currentUser: string;
   onSubmit: (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[] }) => void;
   onClose: () => void;
+  initialCategory?: KnowledgeCategory;
 }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [tagsInput, setTagsInput] = useState("");
-  const [category, setCategory] = useState<KnowledgeCategory>("other");
+  const [category, setCategory] = useState<KnowledgeCategory>(initialCategory || "tips");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     if (!title.trim() || !body.trim() || submitting) return;
     setSubmitting(true);
-    const tags = tagsInput
-      .split(/[,、\s]+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const tags = tagsInput.split(/[,、\s]+/).map((t) => t.trim()).filter(Boolean);
     await onSubmit({ title: title.trim(), body: body.trim(), tags, category, images: [] });
     setSubmitting(false);
     onClose();
@@ -307,6 +372,26 @@ function NewPostForm({
           </div>
 
           <div className="space-y-4">
+            {/* Category Selection as Cards */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">カテゴリを選択</label>
+              <div className="grid grid-cols-4 gap-2">
+                {Object.entries(CATEGORY_CONFIG).map(([key, config]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setCategory(key as KnowledgeCategory)}
+                    className={`p-2 rounded-lg border-2 text-center transition-all ${config.bgColor} ${
+                      category === key ? "ring-2 ring-blue-500 border-blue-400" : "border-transparent"
+                    }`}
+                  >
+                    <span className="text-xl block">{config.icon}</span>
+                    <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">タイトル</label>
               <input
@@ -330,43 +415,21 @@ function NewPostForm({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => (
-                  <option key={key} value={key}>
-                    {icon} {label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-400 mt-1">
-                ※ 1時間後にAIが自動でタグとカテゴリを最適化します
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">タグ（任意）</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">タグ（任意・カンマ区切り）</label>
               <input
                 type="text"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
-                placeholder="カンマ区切りでタグを入力..."
+                placeholder="Instagram, 効率化, デザイン..."
                 className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">画像（任意）</label>
-              <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
-                <div className="text-gray-400">
-                  <svg className="w-10 h-10 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <p className="text-sm">クリックまたはドラッグで画像をアップロード</p>
-                  <p className="text-xs mt-1">PNG, JPG, GIF（最大5MB）</p>
+              <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center">
+                <div className="text-gray-400 text-sm">
+                  クリックまたはドラッグで画像をアップロード
                 </div>
               </div>
             </div>
@@ -405,11 +468,9 @@ export default function KnowledgePage() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedAuthor, setSelectedAuthor] = useState<string>("all");
-  const [selectedTeam, setSelectedTeam] = useState<string>("all");
-  const [selectedCategory, setSelectedCategory] = useState<KnowledgeCategory | "all">("all");
-  const [sortBy, setSortBy] = useState<SortOption>("newest");
-  const [viewMode, setViewMode] = useState<ViewMode>("all");
+  const [selectedCategory, setSelectedCategory] = useState<KnowledgeCategory | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>("all");
 
   // New post form
   const [showNewPost, setShowNewPost] = useState(false);
@@ -425,24 +486,62 @@ export default function KnowledgePage() {
       });
   }, []);
 
-  // Get unique authors and teams
-  const authors = useMemo(() => {
-    const set = new Set<string>();
-    posts.forEach((p) => set.add(p.author));
-    return Array.from(set).sort();
-  }, [posts]);
-
-  const teams = useMemo(() => {
-    const set = new Set<string>();
+  // Get category counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<KnowledgeCategory, number> = {
+      tips: 0, howto: 0, tool: 0, process: 0,
+      insight: 0, resource: 0, announcement: 0, other: 0,
+    };
     posts.forEach((p) => {
-      if (p.team_id) set.add(p.team_id);
+      if (isWithinPeriod(p.created_at, timePeriod)) {
+        counts[p.category]++;
+      }
     });
-    return Array.from(set).sort();
+    return counts;
+  }, [posts, timePeriod]);
+
+  // Get most recent post per category
+  const recentByCategory = useMemo(() => {
+    const recent: Partial<Record<KnowledgeCategory, KnowledgePost>> = {};
+    const sorted = [...posts].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    sorted.forEach((p) => {
+      if (!recent[p.category]) {
+        recent[p.category] = p;
+      }
+    });
+    return recent;
   }, [posts]);
 
-  // Filter and sort posts
+  // Get trending tags
+  const trendingTags = useMemo(() => {
+    const tagCounts: Record<string, number> = {};
+    posts.forEach((p) => {
+      if (isWithinPeriod(p.created_at, timePeriod)) {
+        p.tags.forEach((tag) => {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        });
+      }
+    });
+    return Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([tag, count]) => ({ tag, count }));
+  }, [posts, timePeriod]);
+
+  // Get popular posts (by likes)
+  const popularPosts = useMemo(() => {
+    return [...posts]
+      .filter((p) => isWithinPeriod(p.created_at, timePeriod))
+      .sort((a, b) => b.likes.length - a.likes.length)
+      .slice(0, 5);
+  }, [posts, timePeriod]);
+
+  // Filter posts
   const filteredPosts = useMemo(() => {
     let result = [...posts];
+
+    // Time period
+    result = result.filter((p) => isWithinPeriod(p.created_at, timePeriod));
 
     // Search
     if (searchQuery) {
@@ -451,65 +550,26 @@ export default function KnowledgePage() {
         (p) =>
           p.title.toLowerCase().includes(q) ||
           p.body.toLowerCase().includes(q) ||
+          p.author.toLowerCase().includes(q) ||
           p.tags.some((t) => t.toLowerCase().includes(q))
       );
     }
 
-    // Author filter
-    if (selectedAuthor !== "all") {
-      result = result.filter((p) => p.author === selectedAuthor);
-    }
-
-    // Team filter
-    if (selectedTeam !== "all") {
-      result = result.filter((p) => p.team_id === selectedTeam);
-    }
-
-    // Category filter
-    if (selectedCategory !== "all") {
+    // Category
+    if (selectedCategory) {
       result = result.filter((p) => p.category === selectedCategory);
     }
 
-    // Sort
-    switch (sortBy) {
-      case "newest":
-        result.sort((a, b) => b.created_at.localeCompare(a.created_at));
-        break;
-      case "oldest":
-        result.sort((a, b) => a.created_at.localeCompare(b.created_at));
-        break;
-      case "popular":
-        result.sort((a, b) => b.likes.length - a.likes.length);
-        break;
-      case "comments":
-        result.sort((a, b) => {
-          const aComments = comments.filter((c) => c.post_id === a.id).length;
-          const bComments = comments.filter((c) => c.post_id === b.id).length;
-          return bComments - aComments;
-        });
-        break;
+    // Tag
+    if (selectedTag) {
+      result = result.filter((p) => p.tags.includes(selectedTag));
     }
 
-    return result;
-  }, [posts, comments, searchQuery, selectedAuthor, selectedTeam, selectedCategory, sortBy]);
+    // Sort by newest
+    result.sort((a, b) => b.created_at.localeCompare(a.created_at));
 
-  // Group by category
-  const groupedByCategory = useMemo(() => {
-    const groups: Record<KnowledgeCategory, KnowledgePost[]> = {
-      tips: [],
-      howto: [],
-      tool: [],
-      process: [],
-      insight: [],
-      resource: [],
-      announcement: [],
-      other: [],
-    };
-    filteredPosts.forEach((p) => {
-      groups[p.category].push(p);
-    });
-    return groups;
-  }, [filteredPosts]);
+    return result;
+  }, [posts, searchQuery, selectedCategory, selectedTag, timePeriod]);
 
   // Handlers
   const handleLike = async (postId: string) => {
@@ -551,6 +611,22 @@ export default function KnowledgePage() {
     }
   };
 
+  const handleTagClick = (tag: string) => {
+    if (tag.startsWith("category:")) {
+      setSelectedCategory(tag.replace("category:", "") as KnowledgeCategory);
+      setSelectedTag(null);
+    } else {
+      setSelectedTag(tag);
+      setSelectedCategory(null);
+    }
+  };
+
+  const clearFilters = () => {
+    setSelectedCategory(null);
+    setSelectedTag(null);
+    setSearchQuery("");
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -559,13 +635,15 @@ export default function KnowledgePage() {
     );
   }
 
+  const hasActiveFilter = selectedCategory || selectedTag || searchQuery;
+
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">ナレッジ共有</h1>
-          <p className="text-sm text-gray-500 mt-0.5">チーム横断でノウハウやTipsを共有</p>
+          <p className="text-sm text-gray-500 mt-0.5">チーム横断でノウハウやTipsを発見・共有</p>
         </div>
         <button
           onClick={() => setShowNewPost(true)}
@@ -579,167 +657,212 @@ export default function KnowledgePage() {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Search & Time Period */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-        <div className="flex flex-wrap gap-4 items-center">
-          {/* Search */}
-          <div className="flex-1 min-w-[200px]">
+        <div className="flex gap-4 items-center">
+          <div className="flex-1 relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="キーワードで検索..."
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="キーワード、タグ、投稿者で検索..."
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-
-          {/* Author Filter */}
-          <select
-            value={selectedAuthor}
-            onChange={(e) => setSelectedAuthor(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">全員</option>
-            {authors.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            {[
+              { value: "all", label: "すべて" },
+              { value: "today", label: "今日" },
+              { value: "week", label: "今週" },
+              { value: "month", label: "今月" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setTimePeriod(opt.value as TimePeriod)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  timePeriod === opt.value
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {opt.label}
+              </button>
             ))}
-          </select>
-
-          {/* Team Filter */}
-          <select
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">全チーム</option>
-            {teams.map((t) => (
-              <option key={t} value={t}>
-                {t === "team_001" ? "マーケティング" : t === "team_002" ? "コンテンツ" : t}
-              </option>
-            ))}
-          </select>
-
-          {/* Category Filter */}
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value as KnowledgeCategory | "all")}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">全カテゴリ</option>
-            {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => (
-              <option key={key} value={key}>
-                {icon} {label}
-              </option>
-            ))}
-          </select>
-
-          {/* Sort */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="newest">新着順</option>
-            <option value="oldest">古い順</option>
-            <option value="popular">人気順</option>
-            <option value="comments">コメント数</option>
-          </select>
-
-          {/* View Mode */}
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
-            <button
-              onClick={() => setViewMode("all")}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                viewMode === "all" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              一覧
-            </button>
-            <button
-              onClick={() => setViewMode("category")}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                viewMode === "category" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              カテゴリ別
-            </button>
           </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">総投稿数</p>
-          <p className="text-2xl font-bold text-gray-800">{posts.length}</p>
+      {/* Category Cards */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-bold text-gray-800">カテゴリから探す</h2>
+          {selectedCategory && (
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              すべて表示
+            </button>
+          )}
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">総コメント</p>
-          <p className="text-2xl font-bold text-gray-800">{comments.length}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">投稿者数</p>
-          <p className="text-2xl font-bold text-gray-800">{authors.length}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">AI分類済み</p>
-          <p className="text-2xl font-bold text-gray-800">{posts.filter((p) => p.ai_categorized).length}</p>
+        <div className="grid grid-cols-4 lg:grid-cols-8 gap-3">
+          {Object.entries(CATEGORY_CONFIG).map(([key, config]) => (
+            <CategoryCard
+              key={key}
+              category={key as KnowledgeCategory}
+              count={categoryCounts[key as KnowledgeCategory]}
+              recentPost={recentByCategory[key as KnowledgeCategory]}
+              isSelected={selectedCategory === key}
+              onClick={() => setSelectedCategory(selectedCategory === key ? null : key as KnowledgeCategory)}
+            />
+          ))}
         </div>
       </div>
 
-      {/* Posts */}
-      {viewMode === "all" ? (
-        <div className="space-y-4">
-          {filteredPosts.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-              <div className="text-gray-400 text-lg mb-2">投稿がありません</div>
-              <p className="text-sm text-gray-400">最初の投稿をしてみましょう</p>
+      {/* Main Content Area */}
+      <div className="grid grid-cols-12 gap-6">
+        {/* Main Feed */}
+        <div className="col-span-8">
+          {/* Active Filters */}
+          {hasActiveFilter && (
+            <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 rounded-lg">
+              <span className="text-sm text-blue-600">フィルター:</span>
+              {selectedCategory && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded-full text-sm">
+                  {CATEGORY_CONFIG[selectedCategory].icon} {CATEGORY_CONFIG[selectedCategory].label}
+                  <button onClick={() => setSelectedCategory(null)} className="ml-1 text-gray-400 hover:text-gray-600">×</button>
+                </span>
+              )}
+              {selectedTag && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded-full text-sm">
+                  #{selectedTag}
+                  <button onClick={() => setSelectedTag(null)} className="ml-1 text-gray-400 hover:text-gray-600">×</button>
+                </span>
+              )}
+              {searchQuery && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded-full text-sm">
+                  「{searchQuery}」
+                  <button onClick={() => setSearchQuery("")} className="ml-1 text-gray-400 hover:text-gray-600">×</button>
+                </span>
+              )}
+              <button
+                onClick={clearFilters}
+                className="ml-auto text-sm text-blue-600 hover:underline"
+              >
+                クリア
+              </button>
             </div>
-          ) : (
-            filteredPosts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                comments={comments}
-                currentUser={currentUser}
-                onLike={handleLike}
-                onComment={handleComment}
-              />
-            ))
           )}
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {Object.entries(groupedByCategory).map(([cat, catPosts]) => {
-            if (catPosts.length === 0) return null;
-            const { label, icon, color } = CATEGORY_LABELS[cat as KnowledgeCategory];
-            return (
-              <div key={cat}>
-                <div className="flex items-center gap-2 mb-4">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${color}`}>
-                    {icon} {label}
-                  </span>
-                  <span className="text-sm text-gray-400">{catPosts.length}件</span>
-                </div>
-                <div className="space-y-4">
-                  {catPosts.map((post) => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      comments={comments}
-                      currentUser={currentUser}
-                      onLike={handleLike}
-                      onComment={handleComment}
-                    />
-                  ))}
-                </div>
+
+          {/* Posts */}
+          <div className="space-y-4">
+            {filteredPosts.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+                <div className="text-4xl mb-3">🔍</div>
+                <div className="text-gray-500 text-lg mb-2">投稿が見つかりません</div>
+                <p className="text-sm text-gray-400">フィルターを変更するか、新しく投稿してみましょう</p>
+                {hasActiveFilter && (
+                  <button
+                    onClick={clearFilters}
+                    className="mt-4 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    フィルターをクリア
+                  </button>
+                )}
               </div>
-            );
-          })}
+            ) : (
+              filteredPosts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  comments={comments}
+                  currentUser={currentUser}
+                  onLike={handleLike}
+                  onComment={handleComment}
+                  onTagClick={handleTagClick}
+                />
+              ))
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Sidebar */}
+        <div className="col-span-4 space-y-6">
+          {/* Trending Tags */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="font-bold text-gray-800 mb-3">トレンドタグ</h3>
+            <div className="flex flex-wrap gap-2">
+              {trendingTags.length === 0 ? (
+                <p className="text-sm text-gray-400">タグがありません</p>
+              ) : (
+                trendingTags.map(({ tag, count }) => (
+                  <button
+                    key={tag}
+                    onClick={() => handleTagClick(tag)}
+                    className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                      selectedTag === tag
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    #{tag}
+                    <span className="ml-1 text-xs text-gray-400">{count}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Popular Posts */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="font-bold text-gray-800 mb-3">人気の投稿</h3>
+            <div className="space-y-1">
+              {popularPosts.length === 0 ? (
+                <p className="text-sm text-gray-400">投稿がありません</p>
+              ) : (
+                popularPosts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    comments={comments}
+                    currentUser={currentUser}
+                    onLike={handleLike}
+                    onComment={handleComment}
+                    onTagClick={handleTagClick}
+                    compact
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-4">
+            <h3 className="font-bold text-gray-800 mb-3">統計</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/70 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-blue-600">{posts.length}</p>
+                <p className="text-xs text-gray-500">総投稿数</p>
+              </div>
+              <div className="bg-white/70 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-pink-600">{posts.reduce((sum, p) => sum + p.likes.length, 0)}</p>
+                <p className="text-xs text-gray-500">総いいね</p>
+              </div>
+              <div className="bg-white/70 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-green-600">{comments.length}</p>
+                <p className="text-xs text-gray-500">総コメント</p>
+              </div>
+              <div className="bg-white/70 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-purple-600">{new Set(posts.map(p => p.author)).size}</p>
+                <p className="text-xs text-gray-500">投稿者数</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* New Post Modal */}
       {showNewPost && currentUser && (
@@ -747,6 +870,7 @@ export default function KnowledgePage() {
           currentUser={currentUser}
           onSubmit={handleNewPost}
           onClose={() => setShowNewPost(false)}
+          initialCategory={selectedCategory || undefined}
         />
       )}
     </div>
