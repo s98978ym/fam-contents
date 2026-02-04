@@ -364,7 +364,6 @@ function QuickPostBox({
   const [category, setCategory] = useState<KnowledgeCategory>("tips");
   const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // AI校正関連のstate
   const [proofreadText, setProofreadText] = useState<string | null>(null);
@@ -382,44 +381,59 @@ function QuickPostBox({
   ];
   const [placeholder] = useState(() => placeholders[Math.floor(Math.random() * placeholders.length)]);
 
-  // テキストエリア自動リサイズ
-  const autoResize = useCallback(() => {
+  // テキストエリアの高さをピクセルで明示管理（CSSトランジション対応）
+  const COLLAPSED_H = 44;
+  const EXPANDED_MIN = 128;
+  const EXPANDED_MAX = 240;
+  const [textareaH, setTextareaH] = useState(COLLAPSED_H);
+
+  // テキストエリア自動リサイズ — scrollHeight から目標高さを計算
+  const recalcHeight = useCallback(() => {
     const ta = textareaRef.current;
-    if (!ta) return;
+    if (!ta || !isExpanded) return;
+    // 一旦autoにしてscrollHeightを取得
+    const prev = ta.style.height;
     ta.style.height = "auto";
-    const max = 240;
-    ta.style.height = Math.min(ta.scrollHeight, max) + "px";
-    if (ta.scrollHeight > max) {
-      ta.style.overflowY = "auto";
-    } else {
-      ta.style.overflowY = "hidden";
-    }
-  }, []);
+    const desired = Math.max(EXPANDED_MIN, Math.min(ta.scrollHeight, EXPANDED_MAX));
+    ta.style.height = prev; // 戻す（React管理のstyleで再描画される）
+    setTextareaH(desired);
+  }, [isExpanded]);
 
+  // body変更時にリサイズ
   useEffect(() => {
-    if (isExpanded && !showComparison) autoResize();
-  }, [body, isExpanded, showComparison, autoResize]);
+    if (isExpanded && !showComparison) recalcHeight();
+  }, [body, isExpanded, showComparison, recalcHeight]);
 
-  // 展開時にフォーカス
+  // 展開時にフォーカス＋リサイズ
   useEffect(() => {
     if (isExpanded && textareaRef.current && !showComparison) {
       textareaRef.current.focus();
-      // 初期リサイズ（展開直後）
-      requestAnimationFrame(autoResize);
+      // 次フレームで高さセット（transition発火のため）
+      requestAnimationFrame(() => {
+        recalcHeight();
+      });
     }
-  }, [isExpanded, showComparison, autoResize]);
+  }, [isExpanded, showComparison, recalcHeight]);
 
   const handleExpand = () => {
-    if (!isExpanded) setIsExpanded(true);
+    if (!isExpanded) {
+      setIsExpanded(true);
+      // 展開直後はまだCOLLAPSED_H → 次フレームでEXPANDED_MINにトランジション
+      setTextareaH(COLLAPSED_H);
+    }
   };
 
   const handleCollapse = () => {
-    setIsExpanded(false);
-    setBody("");
-    setProofreadText(null);
-    setSuggestedTags([]);
-    setSuggestedCategory(null);
-    setShowComparison(false);
+    setTextareaH(COLLAPSED_H);
+    // トランジション完了後にstateリセット
+    setTimeout(() => {
+      setIsExpanded(false);
+      setBody("");
+      setProofreadText(null);
+      setSuggestedTags([]);
+      setSuggestedCategory(null);
+      setShowComparison(false);
+    }, 320);
   };
 
   const handleSubmit = async () => {
@@ -439,6 +453,7 @@ function QuickPostBox({
     });
 
     setBody("");
+    setTextareaH(COLLAPSED_H);
     setIsExpanded(false);
     setSubmitting(false);
     setProofreadText(null);
@@ -499,31 +514,30 @@ function QuickPostBox({
 
   return (
     <div
-      ref={containerRef}
-      className={`relative mb-5 rounded-2xl border overflow-hidden transition-all duration-300 ease-out ${
+      className={`relative mb-5 rounded-2xl border transition-all duration-300 ease-out ${
         isExpanded
           ? "bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-200 shadow-lg ring-1 ring-blue-100"
           : "bg-gradient-to-r from-blue-50/80 via-indigo-50/80 to-purple-50/80 border-blue-100 shadow-sm hover:shadow-md hover:border-blue-200"
       }`}
     >
-      {/* 背景装飾 — 展開時のみ表示 */}
+      {/* 背景装飾 — 展開時にフェードイン */}
       <div
-        className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-100/50 to-transparent rounded-bl-full pointer-events-none transition-opacity duration-300 ${
+        className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-100/50 to-transparent rounded-bl-full pointer-events-none transition-opacity duration-500 ${
           isExpanded ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
-        className={`absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-purple-100/50 to-transparent rounded-tr-full pointer-events-none transition-opacity duration-300 ${
+        className={`absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-purple-100/50 to-transparent rounded-tr-full pointer-events-none transition-opacity duration-500 ${
           isExpanded ? "opacity-100" : "opacity-0"
         }`}
       />
 
-      <div className={`relative transition-all duration-300 ease-out ${isExpanded ? "p-5" : "p-4"}`}>
-        {/* メイン入力エリア */}
-        <div className="flex gap-3">
+      <div className={`relative transition-all duration-300 ease-out ${isExpanded ? "p-5" : "px-4 py-3"}`}>
+        {/* メイン入力エリア: アバター + テキストエリア */}
+        <div className="flex gap-3 items-start">
           <div
             className={`${color} rounded-full flex items-center justify-center text-white font-bold shrink-0 ring-2 ring-white shadow-sm transition-all duration-300 ${
-              isExpanded ? "w-11 h-11" : "w-10 h-10"
+              isExpanded ? "w-11 h-11 mt-0.5" : "w-10 h-10"
             }`}
           >
             {currentUser.slice(0, 2)}
@@ -532,7 +546,7 @@ function QuickPostBox({
           <div className="flex-1 min-w-0">
             {/* 比較表示モード */}
             {showComparison && proofreadText ? (
-              <div className="space-y-3 animate-in fade-in duration-200">
+              <div className="space-y-3">
                 {proofreadText !== body ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div onClick={closeComparison} className="cursor-pointer group">
@@ -605,173 +619,176 @@ function QuickPostBox({
                 )}
               </div>
             ) : (
-              /* テキストエリア — 折りたたみ/展開を滑らかに遷移 */
+              /* テキストエリア — 明示ピクセル高さでスムーズにトランジション */
               <textarea
                 ref={textareaRef}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 onFocus={handleExpand}
                 placeholder={isExpanded ? "気軽にナレッジを共有しよう！\n\n例: 「Canvaのバッチ作成機能を使うと画像が一括で作れて便利」" : placeholder}
-                className={`w-full bg-white border text-gray-700 resize-none transition-all duration-300 ease-out outline-none ${
+                className={`w-full bg-white border resize-none outline-none transition-all duration-300 ease-out ${
                   isExpanded
-                    ? "px-4 py-3 rounded-xl border-gray-200 focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm min-h-[120px]"
-                    : "px-4 py-2.5 rounded-xl border-white/80 shadow-sm hover:shadow hover:bg-white/80 cursor-pointer text-gray-400 min-h-0 h-[42px] overflow-hidden"
+                    ? "px-4 py-3 rounded-xl border-gray-200 focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm text-gray-700"
+                    : "px-4 py-2.5 rounded-xl border-white/80 shadow-sm hover:shadow hover:bg-white/80 cursor-pointer text-gray-400"
                 }`}
                 rows={1}
-                style={isExpanded ? undefined : { height: "42px" }}
+                style={{
+                  height: `${textareaH}px`,
+                  overflowY: textareaH >= EXPANDED_MAX ? "auto" : "hidden",
+                }}
               />
             )}
           </div>
         </div>
 
-        {/* 展開コンテンツ — 高さアニメーション */}
+        {/* 展開コンテンツ — CSS Grid で高さアニメーション */}
         <div
-          className={`transition-all duration-300 ease-out overflow-hidden ${
-            isExpanded
-              ? "max-h-[600px] opacity-100 mt-3"
-              : "max-h-0 opacity-0 mt-0"
-          }`}
+          className="grid transition-[grid-template-rows] duration-300 ease-out"
+          style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
         >
-          {/* 文字数カウント + ヒント */}
-          {!showComparison && (
-            <div className="flex items-center justify-between ml-[52px] mb-2">
-              <p className={`text-[11px] transition-colors ${charCount > 0 ? "text-gray-400" : "text-transparent"}`}>
-                {charCount > 0 && `${charCount}文字`}
-              </p>
-              {charCount > 20 && (
-                <p className="text-[11px] text-purple-400 animate-in fade-in slide-in-from-right-2 duration-300">
-                  「AIで校正」で文章を整えられます
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* 適用済みタグ表示 */}
-          {!showComparison && suggestedTags.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap ml-[52px] mb-2">
-              <span className="text-[11px] text-purple-500">タグ:</span>
-              {suggestedTags.map((tag) => (
-                <span key={tag} className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs border border-purple-200">
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* カテゴリ選択 */}
-          <div className="flex items-center gap-2 flex-wrap ml-[52px] mb-3">
-            <span className="text-xs text-gray-400">カテゴリ:</span>
-            {Object.entries(CATEGORY_CONFIG).slice(0, 5).map(([key, config]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setCategory(key as KnowledgeCategory)}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                  category === key
-                    ? `bg-white ${config.color} ring-1 ring-current shadow-sm`
-                    : "bg-white/60 text-gray-500 hover:bg-white hover:shadow-sm"
-                }`}
-              >
-                <span>{config.icon}</span>
-                <span>{config.label}</span>
-              </button>
-            ))}
-            <button
-              type="button"
-              className="text-xs text-gray-400 hover:text-gray-600"
-              onClick={() => {
-                const cats: KnowledgeCategory[] = ["resource", "announcement", "other"];
-                const current = cats.indexOf(category as KnowledgeCategory);
-                setCategory(cats[(current + 1) % cats.length] as KnowledgeCategory);
-              }}
-            >
-              +他
-            </button>
-          </div>
-
-          {/* ツールバー (区切り線で分離) */}
-          <div className="flex items-center justify-between ml-[52px] pt-3 border-t border-gray-200/60">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCollapse}
-                className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-lg transition-all"
-              >
-                キャンセル
-              </button>
+          <div className="overflow-hidden">
+            <div className="pt-3 ml-[52px]">
+              {/* 文字数カウント + ヒント */}
               {!showComparison && (
+                <div className="flex items-center justify-between mb-2">
+                  <p className={`text-[11px] transition-colors duration-300 ${charCount > 0 ? "text-gray-400" : "text-transparent"}`}>
+                    {charCount > 0 && `${charCount}文字`}
+                  </p>
+                  {charCount > 20 && (
+                    <p className="text-[11px] text-purple-400">
+                      「AIで校正」で文章を整えられます
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* 適用済みタグ表示 */}
+              {!showComparison && suggestedTags.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <span className="text-[11px] text-purple-500">タグ:</span>
+                  {suggestedTags.map((tag) => (
+                    <span key={tag} className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs border border-purple-200">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* カテゴリ選択 */}
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <span className="text-xs text-gray-400">カテゴリ:</span>
+                {Object.entries(CATEGORY_CONFIG).slice(0, 5).map(([key, config]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setCategory(key as KnowledgeCategory)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                      category === key
+                        ? `bg-white ${config.color} ring-1 ring-current shadow-sm`
+                        : "bg-white/60 text-gray-500 hover:bg-white hover:shadow-sm"
+                    }`}
+                  >
+                    <span>{config.icon}</span>
+                    <span>{config.label}</span>
+                  </button>
+                ))}
                 <button
                   type="button"
-                  onClick={handleProofread}
-                  disabled={!body.trim() || isProofreading}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-white/70 hover:bg-purple-50 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-purple-200 hover:border-purple-300 hover:shadow-sm"
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                  onClick={() => {
+                    const cats: KnowledgeCategory[] = ["resource", "announcement", "other"];
+                    const current = cats.indexOf(category as KnowledgeCategory);
+                    setCategory(cats[(current + 1) % cats.length] as KnowledgeCategory);
+                  }}
                 >
-                  {isProofreading ? (
-                    <>
-                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      校正中...
-                    </>
+                  +他
+                </button>
+              </div>
+
+              {/* ツールバー */}
+              <div className="flex items-center justify-between pt-3 border-t border-gray-200/60">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCollapse}
+                    className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-lg transition-all"
+                  >
+                    キャンセル
+                  </button>
+                  {!showComparison && (
+                    <button
+                      type="button"
+                      onClick={handleProofread}
+                      disabled={!body.trim() || isProofreading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-white/70 hover:bg-purple-50 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-purple-200 hover:border-purple-300 hover:shadow-sm"
+                    >
+                      {isProofreading ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          校正中...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                          </svg>
+                          AIで校正
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!body.trim() || submitting || showComparison}
+                  className={`inline-flex items-center gap-2 px-6 py-2.5 text-white text-sm font-semibold rounded-full transition-all shadow-md active:scale-[0.97] ${
+                    !body.trim() || submitting || showComparison
+                      ? "bg-gray-300 cursor-not-allowed shadow-none"
+                      : "bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 hover:shadow-lg"
+                  }`}
+                >
+                  {submitting ? (
+                    "共有中..."
                   ) : (
                     <>
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                       </svg>
-                      AIで校正
+                      シェアする
                     </>
                   )}
                 </button>
-              )}
+              </div>
             </div>
-            <button
-              onClick={handleSubmit}
-              disabled={!body.trim() || submitting || showComparison}
-              className={`inline-flex items-center gap-2 px-6 py-2.5 text-white text-sm font-semibold rounded-full transition-all shadow-md active:scale-[0.97] ${
-                !body.trim() || submitting || showComparison
-                  ? "bg-gray-300 cursor-not-allowed shadow-none"
-                  : "bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 hover:shadow-lg"
-              }`}
-            >
-              {submitting ? (
-                "共有中..."
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                  </svg>
-                  シェアする
-                </>
-              )}
-            </button>
           </div>
         </div>
 
-        {/* 折りたたみ時のカテゴリショートカット */}
+        {/* 折りたたみ時のカテゴリショートカット — CSS Grid で滑らか */}
         <div
-          className={`transition-all duration-300 ease-out overflow-hidden ${
-            !isExpanded
-              ? "max-h-[40px] opacity-100 mt-2"
-              : "max-h-0 opacity-0 mt-0"
-          }`}
+          className="grid transition-[grid-template-rows] duration-300 ease-out"
+          style={{ gridTemplateRows: !isExpanded ? "1fr" : "0fr" }}
         >
-          <div className="flex items-center gap-2 ml-[52px]">
-            {[
-              { key: "tips" as KnowledgeCategory, icon: "💡", label: "Tips" },
-              { key: "howto" as KnowledgeCategory, icon: "📖", label: "ハウツー" },
-              { key: "tool" as KnowledgeCategory, icon: "🔧", label: "ツール" },
-              { key: "insight" as KnowledgeCategory, icon: "📊", label: "気づき" },
-              { key: "process" as KnowledgeCategory, icon: "⚙️", label: "プロセス" },
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => { setCategory(item.key); setIsExpanded(true); }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white/70 text-gray-500 hover:bg-white hover:text-blue-600 hover:shadow-sm transition-all border border-transparent hover:border-blue-200"
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
+          <div className="overflow-hidden">
+            <div className="flex items-center gap-2 ml-[52px] pt-2">
+              {[
+                { key: "tips" as KnowledgeCategory, icon: "💡", label: "Tips" },
+                { key: "howto" as KnowledgeCategory, icon: "📖", label: "ハウツー" },
+                { key: "tool" as KnowledgeCategory, icon: "🔧", label: "ツール" },
+                { key: "insight" as KnowledgeCategory, icon: "📊", label: "気づき" },
+                { key: "process" as KnowledgeCategory, icon: "⚙️", label: "プロセス" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => { setCategory(item.key); setIsExpanded(true); }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white/70 text-gray-500 hover:bg-white hover:text-blue-600 hover:shadow-sm transition-all border border-transparent hover:border-blue-200"
+                >
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
