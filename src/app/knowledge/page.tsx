@@ -949,6 +949,11 @@ export default function KnowledgePage() {
       });
       if (res.ok) {
         const newPost = await res.json();
+        // サンプルデータが未来のタイムスタンプを持つ場合、新規投稿が最新になるよう調整
+        const latest = posts.reduce((max, p) => (p.created_at > max ? p.created_at : max), "");
+        if (newPost.created_at <= latest) {
+          newPost.created_at = new Date(new Date(latest).getTime() + 1000).toISOString();
+        }
         setPosts((prev) => [newPost, ...prev]);
       }
     } catch (e) {
