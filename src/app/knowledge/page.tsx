@@ -349,6 +349,11 @@ function NewPostForm({
   const [category, setCategory] = useState<KnowledgeCategory>(initialCategory || "tips");
   const [submitting, setSubmitting] = useState(false);
 
+  // AI校正関連のstate
+  const [proofreadText, setProofreadText] = useState<string | null>(null);
+  const [isProofreading, setIsProofreading] = useState(false);
+  const [showComparison, setShowComparison] = useState(false);
+
   const handleSubmit = async () => {
     if (!title.trim() || !body.trim() || submitting) return;
     setSubmitting(true);
@@ -356,6 +361,48 @@ function NewPostForm({
     await onSubmit({ title: title.trim(), body: body.trim(), tags, category, images: [] });
     setSubmitting(false);
     onClose();
+  };
+
+  // AI校正を実行
+  const handleProofread = async () => {
+    if (!body.trim() || isProofreading) return;
+    setIsProofreading(true);
+    try {
+      const res = await fetch("/api/knowledge/proofread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: body }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.changes_made) {
+          setProofreadText(data.proofread);
+          setShowComparison(true);
+        } else {
+          setProofreadText(null);
+          setShowComparison(false);
+        }
+      }
+    } catch (e) {
+      console.error("Proofreading failed:", e);
+    } finally {
+      setIsProofreading(false);
+    }
+  };
+
+  // 校正後のテキストを適用
+  const applyProofreadText = () => {
+    if (proofreadText) {
+      setBody(proofreadText);
+      setProofreadText(null);
+      setShowComparison(false);
+    }
+  };
+
+  // 比較表示を閉じる
+  const closeComparison = () => {
+    setShowComparison(false);
+    setProofreadText(null);
   };
 
   return (
@@ -404,14 +451,76 @@ function NewPostForm({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">内容</label>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="ナレッジやTipsを共有..."
-                rows={8}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">内容</label>
+                <button
+                  type="button"
+                  onClick={handleProofread}
+                  disabled={!body.trim() || isProofreading}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProofreading ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      校正中...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      AIで校正
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* 比較表示モード */}
+              {showComparison && proofreadText ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* 元の文章 */}
+                    <div
+                      onClick={closeComparison}
+                      className="cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-xs font-medium text-gray-500">元の文章</span>
+                      </div>
+                      <div className="h-48 p-3 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap group-hover:border-gray-300 transition-colors">
+                        {body}
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1 text-center group-hover:text-gray-500">クリックで元のまま編集を続ける</p>
+                    </div>
+
+                    {/* 校正後の文章 */}
+                    <div
+                      onClick={applyProofreadText}
+                      className="cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-xs font-medium text-purple-600">校正後</span>
+                        <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
+                      </div>
+                      <div className="h-48 p-3 border-2 border-purple-300 rounded-lg bg-purple-50 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100 transition-colors">
+                        {proofreadText}
+                      </div>
+                      <p className="text-[10px] text-purple-500 mt-1 text-center group-hover:text-purple-600">クリックで適用</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="ナレッジやTipsを共有..."
+                  rows={8}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              )}
             </div>
 
             <div>
@@ -444,7 +553,7 @@ function NewPostForm({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!title.trim() || !body.trim() || submitting}
+              disabled={!title.trim() || !body.trim() || submitting || showComparison}
               className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? "投稿中..." : "投稿する"}
