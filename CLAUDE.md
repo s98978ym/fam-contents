@@ -264,6 +264,7 @@ Gemini API クライアント。`https` モジュール + `https-proxy-agent` �
 | Gemini SDK がプロキシ非対応 | `@google/generative-ai` SDKの内部 `fetch()` は `HTTPS_PROXY` を無視する。プロキシ環境で接続不可 | SDKを使わず `https` モジュール + `https-proxy-agent` でREST直接呼び出しを使う |
 | `.env.local` 未作成で API 未接続 | APIキーを `.env.local` に設定しないとフォールバック（シミュレーション）が動作し、一見動いているように見える | `.env.local.example` を用意し、セットアップ手順に記載。`isGeminiAvailable` フラグでログ出力し、フォールバック動作時はコンソールに明示する |
 | フォールバックが弱すぎて違いがわからない | regex ベースのシミュレーションが `**` 除去程度しかせず、「変更なし」と誤判定 | フォールバックでも意味のある変換をするか、フォールバック動作中であることをUIに明示する |
+| フォールバックが無言で動作しユーザーが混乱 | APIレスポンスにAI/シミュレーションの判別情報がなく、UIも区別しなかった。ユーザーは「AIが壊れている」と認識 | APIレスポンスに必ず `source: "gemini" \| "simulation"` を含める。UIでシミュレーション時は警告バナー、Gemini時は「Gemini」バッジを表示する |
 
 ---
 
@@ -280,6 +281,9 @@ Gemini API クライアント。`https` モジュール + `https-proxy-agent` �
 - 全てのGemini API呼び出しは `try-catch` でラップし、エラー時はフォールバック処理を実行
 - フォールバック時もレスポンス構造は同一にする（呼び出し元で分岐不要）
 - `isGeminiAvailable` でAPI利用可否を事前判定し、不要なAPI呼び出しを避ける
+- **必須: APIレスポンスに `source` フィールドを含める** (`"gemini"` or `"simulation"`)。サイレントフォールバックは禁止
+- **必須: UIでフォールバック動作を明示する**。シミュレーション時は警告バナー（amber）、Gemini成功時は「Gemini」バッジ（green）
+- サーバーログにも `[proofread]` 等のプレフィックスで接続状態を出力する
 
 ### プロンプト設計
 
