@@ -241,12 +241,11 @@ UIラベル・プレースホルダー・ヒントテキストはすべて**日�
 
 ### `lib/gemini.ts`
 
-Gemini API クライアント。`https` モジュール + `https-proxy-agent` でREST直接呼び出し。
+Gemini API クライアント。ネイティブ `fetch()` でREST呼び出し（Vercel / Node.js 18+ 対応）。
 
 - `isGeminiAvailable` — APIキー設定有無のフラグ
 - `generateText(prompt, options)` — テキスト生成
 - `generateJSON<T>(prompt, options)` — JSON モード生成（`responseMimeType: "application/json"`）
-- プロキシ対応: `HTTPS_PROXY` 環境変数があれば `HttpsProxyAgent` を使用
 - フォールバック設計: API未設定・エラー時はシミュレーションにフォールバック（各APIルートで実装）
 
 ### `contexts/team-context.tsx`
@@ -275,6 +274,7 @@ Gemini API クライアント。`https` モジュール + `https-proxy-agent` �
 | フォールバックが弱すぎて違いがわからない | regex ベースのシミュレーションが `**` 除去程度しかせず、「変更なし」と誤判定 | フォールバックでも意味のある変換をするか、フォールバック動作中であることをUIに明示する |
 | フォールバックが無言で動作しユーザーが混乱 | APIレスポンスにAI/シミュレーションの判別情報がなく、UIも区別しなかった。ユーザーは「AIが壊れている」と認識 | APIレスポンスに必ず `source: "gemini" \| "simulation"` を含める。UIでシミュレーション時は警告バナー、Gemini時は「Gemini」バッジを表示する |
 | デプロイ環境を確認せずローカル前提で案内 | Vercel環境のユーザーに `.env.local` とサーバー再起動を案内してしまった | 環境変数の設定案内はデプロイ環境に依存する。UIの警告メッセージも「環境変数を設定してください」のように環境非依存にする。CLAUDE.mdにデプロイ環境を明記する |
+| `https` モジュールがVercelで動作不安定 | Node.js `https` + `https-proxy-agent` による低レベルHTTPクライアントがVercelサーバーレス環境で正常動作しなかった | Vercel対応にはネイティブ `fetch()` を使う。`https` モジュールや外部HTTPライブラリは不要 |
 
 ---
 
@@ -283,7 +283,7 @@ Gemini API クライアント。`https` モジュール + `https-proxy-agent` �
 ### 接続方式
 
 - **SDK不使用**: `@google/generative-ai` は使わない。プロキシ環境で動作しないため
-- **REST直接呼び出し**: `https` モジュール + `https-proxy-agent` で `generativelanguage.googleapis.com` に直接リクエスト
+- **fetch() ベース**: ネイティブ `fetch()` で `generativelanguage.googleapis.com` に直接リクエスト。`https` モジュールや `https-proxy-agent` は使わない（Vercelサーバーレス環境で問題が起きるため）
 - **環境変数**: `GEMINI_API_KEY` を設定（Vercel: ダッシュボード Environment Variables、ローカル: `.env.local`）。未設定時はフォールバック
 
 ### フォールバック設計
