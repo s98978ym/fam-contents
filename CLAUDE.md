@@ -56,6 +56,13 @@ src/
     └── content_package.ts   # ドメイン型定義
 ```
 
+### デプロイ環境
+
+- **ホスティング:** Vercel
+- **環境変数:** Vercelダッシュボード（Settings → Environment Variables）で設定
+  - `GEMINI_API_KEY` — Gemini API キー（必須: AI機能を有効にするため）
+- **注意:** 環境変数を追加・変更した後は**再デプロイが必要**（Vercelは自動反映しない）
+
 ### 開発環境のセットアップ
 
 ```bash
@@ -64,6 +71,8 @@ npm run dev     # 開発サーバー起動
 npm run build   # 本番ビルド
 npm run lint    # Next.js組み込みESLint
 ```
+
+ローカル開発時は `.env.local` で環境変数を設定する。
 
 ---
 
@@ -265,6 +274,7 @@ Gemini API クライアント。`https` モジュール + `https-proxy-agent` �
 | `.env.local` 未作成で API 未接続 | APIキーを `.env.local` に設定しないとフォールバック（シミュレーション）が動作し、一見動いているように見える | `.env.local.example` を用意し、セットアップ手順に記載。`isGeminiAvailable` フラグでログ出力し、フォールバック動作時はコンソールに明示する |
 | フォールバックが弱すぎて違いがわからない | regex ベースのシミュレーションが `**` 除去程度しかせず、「変更なし」と誤判定 | フォールバックでも意味のある変換をするか、フォールバック動作中であることをUIに明示する |
 | フォールバックが無言で動作しユーザーが混乱 | APIレスポンスにAI/シミュレーションの判別情報がなく、UIも区別しなかった。ユーザーは「AIが壊れている」と認識 | APIレスポンスに必ず `source: "gemini" \| "simulation"` を含める。UIでシミュレーション時は警告バナー、Gemini時は「Gemini」バッジを表示する |
+| デプロイ環境を確認せずローカル前提で案内 | Vercel環境のユーザーに `.env.local` とサーバー再起動を案内してしまった | 環境変数の設定案内はデプロイ環境に依存する。UIの警告メッセージも「環境変数を設定してください」のように環境非依存にする。CLAUDE.mdにデプロイ環境を明記する |
 
 ---
 
@@ -274,7 +284,7 @@ Gemini API クライアント。`https` モジュール + `https-proxy-agent` �
 
 - **SDK不使用**: `@google/generative-ai` は使わない。プロキシ環境で動作しないため
 - **REST直接呼び出し**: `https` モジュール + `https-proxy-agent` で `generativelanguage.googleapis.com` に直接リクエスト
-- **環境変数**: `GEMINI_API_KEY` を `.env.local` に設定。未設定時はフォールバック
+- **環境変数**: `GEMINI_API_KEY` を設定（Vercel: ダッシュボード Environment Variables、ローカル: `.env.local`）。未設定時はフォールバック
 
 ### フォールバック設計
 

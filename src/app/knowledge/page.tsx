@@ -551,7 +551,7 @@ function QuickPostBox({
               <div className="space-y-3">
                 {proofreadSource === "simulation" && (
                   <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-xs text-amber-700">Gemini API未接続のためシミュレーションモードです。.env.local に GEMINI_API_KEY を設定し、サーバーを再起動してください。</p>
+                    <p className="text-xs text-amber-700">Gemini API未接続のためシミュレーションモードです。環境変数 GEMINI_API_KEY を設定し、再デプロイしてください。</p>
                   </div>
                 )}
                 {proofreadText !== body ? (
@@ -975,7 +975,7 @@ function NewPostForm({
                 <div className="space-y-3">
                   {proofreadSource === "simulation" && (
                     <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="text-xs text-amber-700">Gemini API未接続のためシミュレーションモードです。.env.local に GEMINI_API_KEY を設定し、サーバーを再起動してください。</p>
+                      <p className="text-xs text-amber-700">Gemini API未接続のためシミュレーションモードです。環境変数 GEMINI_API_KEY を設定し、再デプロイしてください。</p>
                     </div>
                   )}
                   {/* 文章比較 */}
