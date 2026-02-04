@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useTeam, type Team } from "@/contexts/team-context";
 
 // ---------------------------------------------------------------------------
@@ -84,11 +85,22 @@ export default function TeamsPage() {
           <h2 className="text-xl font-bold text-slate-800 mb-1">チーム管理</h2>
           <p className="text-sm text-slate-400">チームの作成・メンバー管理</p>
         </div>
-        {viewMode === "active" && !showNewForm && (
-          <button onClick={() => setShowNewForm(true)} className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
-            + 新規チーム
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/teams/analytics"
+            className="px-4 py-2 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-1.5"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            利用状況
+          </Link>
+          {viewMode === "active" && !showNewForm && (
+            <button onClick={() => setShowNewForm(true)} className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+              + 新規チーム
+            </button>
+          )}
+        </div>
       </div>
 
       {/* View mode tabs */}
