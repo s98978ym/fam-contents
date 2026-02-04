@@ -260,15 +260,63 @@ export default function FolderDetailPage() {
     });
   }, [folderId]);
 
-  const handleAnalyze = useCallback(() => {
+  const handleAnalyze = useCallback(async () => {
     setAnalyzing(true);
-    setTimeout(() => { setAiAnalysis(generateMockAnalysis(driveFiles)); setAnalyzing(false); }, 1500);
-  }, [driveFiles]);
+    try {
+      const res = await fetch("/api/contents/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: driveFiles.map((f) => ({ name: f.name, category: f.category })),
+          folderName: folder?.name || "",
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiAnalysis({ steps: data.steps, direction: data.direction });
+      } else {
+        setAiAnalysis(generateMockAnalysis(driveFiles));
+      }
+    } catch {
+      setAiAnalysis(generateMockAnalysis(driveFiles));
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [driveFiles, folder]);
 
-  const handleGenerate = useCallback(() => {
+  const handleGenerate = useCallback(async () => {
     setGenerating(true);
     setStep(3);
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/contents/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel: settings.channel,
+          title: folder?.name || "コンテンツ",
+          summary: aiAnalysis?.direction || folder?.name || "",
+          files: driveFiles.map((f) => ({ name: f.name, category: f.category })),
+          analysisDirection: aiAnalysis?.direction,
+          taste: settings.taste,
+          customInstructions: settings.customInstructions,
+        }),
+      });
+      let generatedContent: Record<string, unknown>;
+      if (res.ok) {
+        const data = await res.json();
+        generatedContent = data.content;
+      } else {
+        generatedContent = generateMockContent(settings.channel);
+      }
+      setPreview({
+        channel: settings.channel,
+        channelLabel: CHANNEL_LABELS[settings.channel] ?? settings.channel,
+        generatedContent,
+        files: wizardFiles,
+        settings,
+        aiAnalysis,
+      });
+    } catch {
       setPreview({
         channel: settings.channel,
         channelLabel: CHANNEL_LABELS[settings.channel] ?? settings.channel,
@@ -277,9 +325,10 @@ export default function FolderDetailPage() {
         settings,
         aiAnalysis,
       });
+    } finally {
       setGenerating(false);
-    }, 2500);
-  }, [settings, wizardFiles, aiAnalysis]);
+    }
+  }, [settings, wizardFiles, aiAnalysis, driveFiles, folder]);
 
   const handleUpdateContent = useCallback((key: string, value: string) => {
     setPreview((prev) => {
