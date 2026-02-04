@@ -7,15 +7,62 @@ import { isGeminiAvailable, generateJSON } from "@/lib/gemini";
 // Gemini によるチャネル別コンテンツ生成
 // ---------------------------------------------------------------------------
 
-function buildChannelPrompt(channel: Channel, title: string, summary: string): string {
-  const base = `あなたはマルチチャネル・コンテンツ運用のプロフェッショナルです。
+interface GenerationContext {
+  title: string;
+  summary: string;
+  files?: { name: string; category: string }[];
+  analysisDirection?: string;
+  taste?: string;
+  customInstructions?: string;
+}
+
+function buildChannelPrompt(channel: Channel, ctx: GenerationContext): string {
+  let base = `あなたはマルチチャネル・コンテンツ運用のプロフェッショナルです。
 以下のコンテンツ情報をもとに、指定チャネル向けのコンテンツを生成してください。
 
 ## コンテンツ情報
-タイトル: ${title}
-概要: ${summary || title}
+タイトル: ${ctx.title}
+概要: ${ctx.summary || ctx.title}
 
 `;
+
+  // 素材ファイル情報を追加
+  if (ctx.files && ctx.files.length > 0) {
+    base += `## 参照素材ファイル
+${ctx.files.map((f) => `- ${f.name}（${f.category}）`).join("\n")}
+
+`;
+  }
+
+  // AI分析の方向性を追加
+  if (ctx.analysisDirection) {
+    base += `## AI分析による方向性
+${ctx.analysisDirection}
+
+`;
+  }
+
+  // テイスト指定
+  if (ctx.taste) {
+    const tasteMap: Record<string, string> = {
+      scientific: "科学的・エビデンスベース。研究データや専門家の見解を重視",
+      casual: "カジュアル・親しみやすい。日常語で読者に寄り添うトーン",
+      professional: "プロフェッショナル・信頼感。業界用語を適切に使い権威性を出す",
+      emotional: "感情に訴える。ストーリーテリングや共感を重視",
+    };
+    base += `## トーン・テイスト
+${tasteMap[ctx.taste] || ctx.taste}
+
+`;
+  }
+
+  // カスタム指示
+  if (ctx.customInstructions) {
+    base += `## 追加指示
+${ctx.customInstructions}
+
+`;
+  }
 
   switch (channel) {
     case "instagram_reels":
@@ -164,10 +211,9 @@ function buildChannelPrompt(channel: Channel, title: string, summary: string): s
 
 async function generateWithGemini(
   channel: Channel,
-  title: string,
-  summary: string
+  ctx: GenerationContext
 ): Promise<Record<string, unknown>> {
-  const prompt = buildChannelPrompt(channel, title, summary);
+  const prompt = buildChannelPrompt(channel, ctx);
   return await generateJSON<Record<string, unknown>>(prompt, {
     temperature: 0.7,
     maxOutputTokens: 4096,
@@ -263,6 +309,16 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const channels: Channel[] = body.channels ?? content.target_channels;
 
+  // リクエストボディからコンテキストを構築（素材ファイル・設定・分析結果）
+  const ctx: GenerationContext = {
+    title: body.title || content.title,
+    summary: body.summary || content.summary,
+    files: body.files,
+    analysisDirection: body.analysisDirection,
+    taste: body.taste,
+    customInstructions: body.customInstructions,
+  };
+
   const generated = [];
   for (const channel of channels) {
     const existing = variantStore.listByContent(id).find((v) => v.channel === channel);
@@ -276,13 +332,15 @@ export async function POST(
     // Gemini API が利用可能なら本物のAI生成
     if (isGeminiAvailable) {
       try {
-        variantBody = await generateWithGemini(channel, content.title, content.summary);
+        console.log(`[generate] Gemini API でチャネル ${channel} のコンテンツを生成...`);
+        variantBody = await generateWithGemini(channel, ctx);
+        console.log(`[generate] Gemini API 成功: ${channel}`);
       } catch (err) {
-        console.error(`Gemini generation error for ${channel}, using stub:`, err);
-        variantBody = generateVariantBody(channel, content.title);
+        console.error(`[generate] Gemini API エラー (${channel}), フォールバック:`, err);
+        variantBody = generateVariantBody(channel, ctx.title);
       }
     } else {
-      variantBody = generateVariantBody(channel, content.title);
+      variantBody = generateVariantBody(channel, ctx.title);
     }
 
     generated.push(
