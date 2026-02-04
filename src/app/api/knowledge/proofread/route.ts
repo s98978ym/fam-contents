@@ -176,11 +176,14 @@ export async function POST(request: Request) {
     const proofread = simulateAIProofread(text);
     const suggestedTags = suggestTags(proofread, titleStr);
     const suggestedCategory = suggestCategory(proofread, titleStr);
+    const textChanged = text !== proofread;
+    const hasTags = suggestedTags.length > 0;
+    const categoryMeaningful = suggestedCategory !== "other";
 
     return NextResponse.json({
       original: text,
       proofread,
-      changes_made: text !== proofread || suggestedTags.length > 0,
+      changes_made: textChanged || hasTags || categoryMeaningful,
       suggested_tags: suggestedTags,
       suggested_category: suggestedCategory,
     });
