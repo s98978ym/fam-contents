@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   sampleContents,
   sampleVariants,
   sampleReviews,
 } from "@/lib/sample_data";
+import { useTeam } from "@/contexts/team-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,11 +26,22 @@ interface MemberStats {
   totalActivity: number;
 }
 
+// メンバーとチームのマッピング（フォールバック）
+const FALLBACK_TEAM_MEMBERS: Record<string, string[]> = {
+  fallback_marketing: ["田中", "佐藤", "高橋"],
+  fallback_content: ["鈴木", "山田"],
+};
+
+const FALLBACK_TEAM_NAMES: Record<string, string> = {
+  fallback_marketing: "マーケティング",
+  fallback_content: "コンテンツ",
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getMembers(): string[] {
+function getMembers(filterMembers?: string[]): string[] {
   const set = new Set<string>();
   for (const v of sampleVariants) {
     if (v.assignee) set.add(v.assignee);
@@ -39,11 +51,15 @@ function getMembers(): string[] {
       set.add(c.created_by);
     }
   }
-  return Array.from(set).sort();
+  const all = Array.from(set).sort();
+  if (filterMembers) {
+    return all.filter((m) => filterMembers.includes(m));
+  }
+  return all;
 }
 
-function calculateMemberStats(): MemberStats[] {
-  const members = getMembers();
+function calculateMemberStats(filterMembers?: string[]): MemberStats[] {
+  const members = getMembers(filterMembers);
 
   return members.map((name) => {
     // コンテンツ作成数
@@ -188,7 +204,36 @@ function StatCard({ icon, label, value, color }: { icon: string; label: string; 
 // ---------------------------------------------------------------------------
 
 export default function TeamAnalyticsPage() {
-  const stats = useMemo(calculateMemberStats, []);
+  const { teams } = useTeam();
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+
+  // チーム一覧を構築（context のチームがあればそちら、なければフォールバック）
+  const teamList = useMemo(() => {
+    if (teams.length > 0) {
+      return teams.map((t) => ({ id: t.id, name: t.name, members: t.members, color: t.color }));
+    }
+    return Object.entries(FALLBACK_TEAM_NAMES).map(([id, name]) => ({
+      id,
+      name,
+      members: FALLBACK_TEAM_MEMBERS[id] || [],
+      color: id === "fallback_marketing" ? "#6366f1" : "#14b8a6",
+    }));
+  }, [teams]);
+
+  // 選択チームのメンバーリスト
+  const filterMembers = useMemo(() => {
+    if (!selectedTeamId) return undefined;
+    const team = teamList.find((t) => t.id === selectedTeamId);
+    return team ? team.members : undefined;
+  }, [selectedTeamId, teamList]);
+
+  const selectedTeamName = useMemo(() => {
+    if (!selectedTeamId) return null;
+    const team = teamList.find((t) => t.id === selectedTeamId);
+    return team ? team.name : null;
+  }, [selectedTeamId, teamList]);
+
+  const stats = useMemo(() => calculateMemberStats(filterMembers), [filterMembers]);
 
   // Total stats
   const totals = useMemo(() => {
@@ -219,9 +264,68 @@ export default function TeamAnalyticsPage() {
           </Link>
         </div>
         <h2 className="text-2xl font-bold text-gray-800">チーム利用状況</h2>
-        <p className="text-sm text-gray-500 mt-1">メンバーごとのアクティビティを数値とグラフで確認</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {selectedTeamName
+            ? `${selectedTeamName}チームのアクティビティを数値とグラフで確認`
+            : "メンバーごとのアクティビティを数値とグラフで確認"}
+        </p>
       </div>
 
+      {/* Team Selector */}
+      <div className="flex items-center gap-2 mb-6">
+        <button
+          onClick={() => setSelectedTeamId(null)}
+          className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+            selectedTeamId === null
+              ? "bg-gray-800 text-white shadow-sm"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          全体
+        </button>
+        {teamList.map((team) => (
+          <button
+            key={team.id}
+            onClick={() => setSelectedTeamId(team.id)}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              selectedTeamId === team.id
+                ? "text-white shadow-sm"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+            style={
+              selectedTeamId === team.id
+                ? { backgroundColor: team.color }
+                : undefined
+            }
+          >
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: team.color }}
+            />
+            {team.name}
+            <span className={`text-xs ${selectedTeamId === team.id ? "text-white/70" : "text-gray-400"}`}>
+              {team.members.length}名
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Empty State */}
+      {stats.length === 0 && selectedTeamId && (
+        <div className="text-center py-16 bg-white rounded-lg border border-gray-200 mb-8">
+          <div className="text-4xl mb-3">📭</div>
+          <p className="text-gray-500 text-lg mb-1">該当メンバーのデータがありません</p>
+          <p className="text-sm text-gray-400">このチームのメンバーにはまだアクティビティがありません</p>
+          <button
+            onClick={() => setSelectedTeamId(null)}
+            className="mt-4 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            全体を表示
+          </button>
+        </div>
+      )}
+
+      {stats.length > 0 && (<>
       {/* Summary Stats */}
       <div className="grid grid-cols-4 gap-3 mb-8">
         <StatCard icon="📝" label="コンテンツ作成数" value={totals.contents} color="hover:border-blue-300" />
@@ -320,7 +424,7 @@ export default function TeamAnalyticsPage() {
         <div className="px-5 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800 flex items-center gap-2">
             <span className="text-lg">📋</span>
-            メンバー別詳細データ
+            {selectedTeamName ? `${selectedTeamName}チーム — メンバー別詳細` : "メンバー別詳細データ"}
           </h3>
         </div>
         <div className="overflow-x-auto">
@@ -452,6 +556,7 @@ export default function TeamAnalyticsPage() {
           </table>
         </div>
       </div>
+      </>)}
     </div>
   );
 }

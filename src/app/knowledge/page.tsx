@@ -126,22 +126,27 @@ function CategoryCard({
   return (
     <button
       onClick={onClick}
-      className={`text-left p-4 rounded-xl border-2 transition-all ${config.bgColor} ${
+      className={`text-left p-3 rounded-xl border-2 transition-all flex flex-col h-full ${config.bgColor} ${
         isSelected ? "ring-2 ring-offset-2 ring-blue-500 border-blue-400" : "border-transparent"
       }`}
     >
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-2xl">{config.icon}</span>
-        <span className={`text-lg font-bold ${config.color}`}>{count}</span>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className={`text-sm font-bold ${config.color}`}>{config.label}</h3>
+        <span className={`text-sm font-bold ${config.color}`}>{count}</span>
       </div>
-      <h3 className={`font-bold ${config.color}`}>{config.label}</h3>
-      <p className="text-xs text-gray-500 mt-0.5">{config.description}</p>
-      {recentPost && (
-        <div className="mt-3 pt-3 border-t border-gray-200/50">
-          <p className="text-xs text-gray-600 truncate">{recentPost.title}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">{recentPost.author} • {formatDate(recentPost.created_at)}</p>
-        </div>
-      )}
+      <p className="text-[11px] text-gray-500 leading-snug">{config.description}</p>
+      <div className="mt-auto pt-2">
+        {recentPost ? (
+          <div className="pt-2 border-t border-gray-200/50">
+            <p className="text-[11px] text-gray-600 truncate">{recentPost.title}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{recentPost.author} · {formatDate(recentPost.created_at)}</p>
+          </div>
+        ) : (
+          <div className="pt-2 border-t border-gray-200/30">
+            <p className="text-[11px] text-gray-400">投稿なし</p>
+          </div>
+        )}
+      </div>
     </button>
   );
 }
@@ -935,14 +940,19 @@ export default function KnowledgePage() {
 
   const handleNewPost = async (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[] }) => {
     if (!currentUser) return;
-    const res = await fetch("/api/knowledge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, author: currentUser }),
-    });
-    if (res.ok) {
-      const newPost = await res.json();
-      setPosts((prev) => [newPost, ...prev]);
+    try {
+      const teamId = USER_TEAM_MAP[currentUser] || undefined;
+      const res = await fetch("/api/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, author: currentUser, team_id: teamId }),
+      });
+      if (res.ok) {
+        const newPost = await res.json();
+        setPosts((prev) => [newPost, ...prev]);
+      }
+    } catch (e) {
+      console.error("Failed to create post:", e);
     }
   };
 
