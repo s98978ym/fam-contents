@@ -548,25 +548,27 @@ function QuickPostBox({
             {showComparison && proofreadText ? (
               <div className="space-y-3">
                 {proofreadText !== body ? (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    {/* 元の文章 */}
                     <div onClick={closeComparison} className="cursor-pointer group">
-                      <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-gray-500">元の文章</span>
+                        <span className="text-[10px] text-gray-400 group-hover:text-gray-500">クリックで元のまま編集を続ける</span>
                       </div>
-                      <div className="h-28 p-3 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap group-hover:border-gray-300 transition-colors">
+                      <div className="p-3 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-500 whitespace-pre-wrap group-hover:border-gray-300 transition-colors leading-relaxed line-through decoration-gray-300">
                         {body}
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1 text-center group-hover:text-gray-500">クリックで元のまま編集を続ける</p>
                     </div>
+                    {/* 校正後の文章 */}
                     <div onClick={applyProofreadResult} className="cursor-pointer group">
-                      <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-purple-600">校正後</span>
                         <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                       </div>
-                      <div className="h-28 p-3 border-2 border-purple-300 rounded-lg bg-purple-50 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100 transition-colors">
+                      <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
                         {proofreadText}
                       </div>
-                      <p className="text-[10px] text-purple-500 mt-1 text-center group-hover:text-purple-600">クリックですべて適用</p>
+                      <p className="text-[10px] text-purple-500 mt-1 text-right group-hover:text-purple-600">クリックですべて適用</p>
                     </div>
                   </div>
                 ) : (
@@ -963,19 +965,19 @@ function NewPostForm({
                 <div className="space-y-3">
                   {/* 文章比較 */}
                   {proofreadText !== body ? (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
                       {/* 元の文章 */}
                       <div
                         onClick={closeComparison}
                         className="cursor-pointer group"
                       >
-                        <div className="flex items-center gap-2 mb-1.5">
+                        <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-medium text-gray-500">元の文章</span>
+                          <span className="text-[10px] text-gray-400 group-hover:text-gray-500">クリックで元のまま編集を続ける</span>
                         </div>
-                        <div className="h-40 p-3 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap group-hover:border-gray-300 transition-colors">
+                        <div className="p-3 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-500 whitespace-pre-wrap group-hover:border-gray-300 transition-colors leading-relaxed line-through decoration-gray-300">
                           {body}
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1 text-center group-hover:text-gray-500">クリックで元のまま編集を続ける</p>
                       </div>
 
                       {/* 校正後の文章 */}
@@ -983,14 +985,14 @@ function NewPostForm({
                         onClick={applyProofreadResult}
                         className="cursor-pointer group"
                       >
-                        <div className="flex items-center gap-2 mb-1.5">
+                        <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-medium text-purple-600">校正後</span>
                           <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                         </div>
-                        <div className="h-40 p-3 border-2 border-purple-300 rounded-lg bg-purple-50 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100 transition-colors">
+                        <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
                           {proofreadText}
                         </div>
-                        <p className="text-[10px] text-purple-500 mt-1 text-center group-hover:text-purple-600">クリックですべて適用</p>
+                        <p className="text-[10px] text-purple-500 mt-1 text-right group-hover:text-purple-600">クリックですべて適用</p>
                       </div>
                     </div>
                   ) : (
