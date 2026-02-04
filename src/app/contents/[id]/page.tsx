@@ -93,6 +93,8 @@ interface AnalysisStep {
 interface AnalysisResult {
   steps: AnalysisStep[];
   direction: string;
+  source?: "gemini" | "simulation";
+  fallback_reason?: string;
 }
 
 function generateMockAnalysis(files: DriveFile[]): AnalysisResult {
@@ -242,6 +244,7 @@ export default function FolderDetailPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState<PreviewData | null>(null);
+  const [generateSource, setGenerateSource] = useState<{ source: "gemini" | "simulation"; fallback_reason?: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [promptVersions, setPromptVersions] = useState<{ id: string; name: string; type: string; version: number }[]>([]);
@@ -273,12 +276,12 @@ export default function FolderDetailPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setAiAnalysis({ steps: data.steps, direction: data.direction });
+        setAiAnalysis({ steps: data.steps, direction: data.direction, source: data.source, fallback_reason: data.fallback_reason });
       } else {
-        setAiAnalysis(generateMockAnalysis(driveFiles));
+        setAiAnalysis({ ...generateMockAnalysis(driveFiles), source: "simulation", fallback_reason: "API呼び出し失敗" });
       }
     } catch {
-      setAiAnalysis(generateMockAnalysis(driveFiles));
+      setAiAnalysis({ ...generateMockAnalysis(driveFiles), source: "simulation", fallback_reason: "ネットワークエラー" });
     } finally {
       setAnalyzing(false);
     }
@@ -305,8 +308,10 @@ export default function FolderDetailPage() {
       if (res.ok) {
         const data = await res.json();
         generatedContent = data.content;
+        setGenerateSource({ source: data.source, fallback_reason: data.fallback_reason });
       } else {
         generatedContent = generateMockContent(settings.channel);
+        setGenerateSource({ source: "simulation", fallback_reason: "API呼び出し失敗" });
       }
       setPreview({
         channel: settings.channel,
@@ -317,6 +322,7 @@ export default function FolderDetailPage() {
         aiAnalysis,
       });
     } catch {
+      setGenerateSource({ source: "simulation", fallback_reason: "ネットワークエラー" });
       setPreview({
         channel: settings.channel,
         channelLabel: CHANNEL_LABELS[settings.channel] ?? settings.channel,
@@ -485,6 +491,18 @@ export default function FolderDetailPage() {
 
                   {aiAnalysis && (
                     <div className="mt-4 space-y-3">
+                      {aiAnalysis.source === "simulation" && (
+                        <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                          <p className="text-xs text-amber-700">シミュレーションモードで動作しています。Gemini APIが有効な場合、素材に基づいたAI分析を行います。</p>
+                          {aiAnalysis.fallback_reason && <p className="text-[10px] text-amber-600 mt-1">詳細: {aiAnalysis.fallback_reason}</p>}
+                        </div>
+                      )}
+                      {aiAnalysis.source === "gemini" && (
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Gemini</span>
+                          <span className="text-[10px] text-gray-400">素材を分析しました</span>
+                        </div>
+                      )}
                       {aiAnalysis.steps.map((s, i) => (
                         <div key={i} className={`rounded-lg border p-3 ${s.status === "done" ? "border-green-200 bg-green-50/50" : "border-gray-200 bg-gray-50"}`}>
                           <div className="flex items-center gap-2 mb-1">
@@ -699,7 +717,23 @@ export default function FolderDetailPage() {
 
           {/* Step 3: Preview */}
           {step === 3 && generating && <StepGenerating channel={settings.channel} />}
-          {step === 3 && !generating && <StepPreview preview={preview} onRegenerate={handleGenerate} generating={generating} onUpdateContent={handleUpdateContent} />}
+          {step === 3 && !generating && (
+            <div>
+              {generateSource?.source === "simulation" && (
+                <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                  <p className="text-xs text-amber-700">シミュレーションモードで生成されました。Gemini APIが有効な場合、素材に基づいたAI生成を行います。</p>
+                  {generateSource.fallback_reason && <p className="text-[10px] text-amber-600 mt-1">詳細: {generateSource.fallback_reason}</p>}
+                </div>
+              )}
+              {generateSource?.source === "gemini" && (
+                <div className="flex items-center gap-1 mb-3">
+                  <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Gemini</span>
+                  <span className="text-[10px] text-gray-400">AIがコンテンツを生成しました</span>
+                </div>
+              )}
+              <StepPreview preview={preview} onRegenerate={handleGenerate} generating={generating} onUpdateContent={handleUpdateContent} />
+            </div>
+          )}
 
           {/* Step 4: Save */}
           {step === 4 && <StepSavePublish preview={preview} onSave={handleSave} onPublish={handlePublish} saving={saving} saved={saved} />}
