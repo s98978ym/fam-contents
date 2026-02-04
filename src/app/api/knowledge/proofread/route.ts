@@ -253,25 +253,30 @@ export async function POST(request: Request) {
 
     const titleStr = typeof title === "string" ? title : "";
 
-    // Gemini API が利用可能なら本物のAI校正、なければシミュレーション
+    // Gemini API が利用可能なら本物のAI発展、なければシミュレーション
     if (isGeminiAvailable) {
       try {
+        console.log("[proofread] Gemini API を使用してナレッジ発展を実行...");
         const result = await proofreadWithGemini(text, titleStr);
         const textChanged = text !== result.proofread;
         const hasTags = result.suggested_tags.length > 0;
         const categoryMeaningful = result.suggested_category !== "other";
 
+        console.log("[proofread] Gemini API 成功");
         return NextResponse.json({
           original: text,
           proofread: result.proofread,
           changes_made: textChanged || hasTags || categoryMeaningful,
           suggested_tags: result.suggested_tags,
           suggested_category: result.suggested_category,
+          source: "gemini",
         });
       } catch (err) {
-        console.error("Gemini API error, falling back to simulation:", err);
+        console.error("[proofread] Gemini API エラー、シミュレーションにフォールバック:", err);
         // Gemini がエラーの場合はフォールバック
       }
+    } else {
+      console.log("[proofread] GEMINI_API_KEY 未設定のためシミュレーションモードで動作");
     }
 
     // フォールバック: シミュレーション
@@ -290,6 +295,7 @@ export async function POST(request: Request) {
       changes_made: textChanged || hasTags || categoryMeaningful,
       suggested_tags: suggestedTags,
       suggested_category: suggestedCategory,
+      source: "simulation",
     });
   } catch {
     return NextResponse.json(

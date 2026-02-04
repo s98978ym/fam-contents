@@ -371,6 +371,7 @@ function QuickPostBox({
   const [suggestedCategory, setSuggestedCategory] = useState<KnowledgeCategory | null>(null);
   const [isProofreading, setIsProofreading] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
+  const [proofreadSource, setProofreadSource] = useState<"gemini" | "simulation" | null>(null);
 
   const placeholders = [
     "今日学んだことや気づきをシェアしよう",
@@ -479,6 +480,7 @@ function QuickPostBox({
         setProofreadText(data.proofread ?? body);
         setSuggestedTags(data.suggested_tags || []);
         setSuggestedCategory(data.suggested_category || null);
+        setProofreadSource(data.source || null);
         setShowComparison(true);
       }
     } catch (e) {
@@ -547,6 +549,11 @@ function QuickPostBox({
             {/* 比較表示モード */}
             {showComparison && proofreadText ? (
               <div className="space-y-3">
+                {proofreadSource === "simulation" && (
+                  <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-xs text-amber-700">Gemini API未接続のためシミュレーションモードです。.env.local に GEMINI_API_KEY を設定し、サーバーを再起動してください。</p>
+                  </div>
+                )}
                 {proofreadText !== body ? (
                   <div className="space-y-2">
                     {/* 元の文章 */}
@@ -563,6 +570,7 @@ function QuickPostBox({
                     <div onClick={applyProofreadResult} className="cursor-pointer group">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-purple-600">AIが発展</span>
+                        {proofreadSource === "gemini" && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Gemini</span>}
                         <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                       </div>
                       <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
@@ -825,6 +833,7 @@ function NewPostForm({
   const [suggestedCategory, setSuggestedCategory] = useState<KnowledgeCategory | null>(null);
   const [isProofreading, setIsProofreading] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
+  const [proofreadSource, setProofreadSource] = useState<"gemini" | "simulation" | null>(null);
 
   const handleSubmit = async () => {
     if (!title.trim() || !body.trim() || submitting) return;
@@ -850,6 +859,7 @@ function NewPostForm({
         setProofreadText(data.proofread ?? body);
         setSuggestedTags(data.suggested_tags || []);
         setSuggestedCategory(data.suggested_category || null);
+        setProofreadSource(data.source || null);
         setShowComparison(true);
       }
     } catch (e) {
@@ -963,6 +973,11 @@ function NewPostForm({
               {/* 比較表示モード */}
               {showComparison && proofreadText ? (
                 <div className="space-y-3">
+                  {proofreadSource === "simulation" && (
+                    <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-xs text-amber-700">Gemini API未接続のためシミュレーションモードです。.env.local に GEMINI_API_KEY を設定し、サーバーを再起動してください。</p>
+                    </div>
+                  )}
                   {/* 文章比較 */}
                   {proofreadText !== body ? (
                     <div className="space-y-2">
@@ -987,6 +1002,7 @@ function NewPostForm({
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-medium text-purple-600">AIが発展</span>
+                          {proofreadSource === "gemini" && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Gemini</span>}
                           <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                         </div>
                         <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">

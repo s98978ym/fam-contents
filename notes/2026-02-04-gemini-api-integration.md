@@ -1,29 +1,58 @@
-# Gemini API統合 — AI校正・コンテンツ生成
+# Gemini API統合 — AIナレッジ発展・コンテンツ生成
 
 ## 何をしたか
 
-- `@google/generative-ai` パッケージを導入し、Gemini 2.0 Flash モデルと接続
-- `src/lib/gemini.ts` に共有クライアントユーティリティを作成（`generateText`, `generateJSON`）
-- 校正API (`/api/knowledge/proofread`) を Gemini 連携に書き換え
-  - 日本語校正に特化したプロンプト設計（7つの校正ルール）
-  - JSON モード (`responseMimeType: "application/json"`) で構造化出力
-  - タグ提案・カテゴリ判定もGeminiに一括依頼
-- コンテンツ生成API (`/api/contents/[id]/generate`) を Gemini 連携に書き換え
-  - 6チャネル別にsystem_specification.mdの仕様をプロンプトに反映
-  - チャネル固有のJSON出力形式を指定
-- API キー未設定時は従来のシミュレーション（正規表現ベース）にフォールバック
+### Gemini API クライアント (`src/lib/gemini.ts`)
+- `https` モジュール + `https-proxy-agent` でREST直接呼び出し（SDKは不使用）
+- `generateText`, `generateJSON<T>` の汎用関数を提供
+- `isGeminiAvailable` フラグでAPI利用可否を判定
+- プロキシ対応: `HTTPS_PROXY` 環境変数があれば `HttpsProxyAgent` を使用
+
+### ナレッジ発展API (`/api/knowledge/proofread`)
+- 「校正」から「ナレッジ発展」にコンセプト変更
+- 4ステップ思考プロセスのプロンプト設計:
+  1. 趣旨の把握（筆者の核心的な主張を特定）
+  2. 必要な観点の特定（ナレッジとして不足している観点を洗い出す）
+  3. 補強コンテンツの検討（数値・事例・実践ステップ・注意点）
+  4. 発展テキストの生成（元の趣旨を核に補強を組み込む）
+- JSON モード (`responseMimeType: "application/json"`) で構造化出力
+- temperature: 0.7, maxOutputTokens: 4096
+- API未設定/エラー時はシミュレーションにフォールバック
+- レスポンスに `source: "gemini" | "simulation"` フィールドを追加
+
+### コンテンツ生成API (`/api/contents/[id]/generate`)
+- 6チャネル別にsystem_specification.mdの仕様をプロンプトに反映
+- Gemini 2.0 Flash モデルでチャネル固有のJSON出力を生成
+- フォールバックはスタブデータを返却
+
+### UI変更
+- 「AIで校正」→「AIで発展」、「校正後」→「AIが発展」にラベル変更
+- Gemini接続時は「Gemini」バッジを表示
+- シミュレーション時は黄色の警告バナーで `.env.local` 設定を案内
 
 ## ハマったポイント
 
-- 旧シミュレーションでは入力テキストに一致する正規表現パターンがなければ「修正なし」を返していた
-  - 例: 「ファンが求めているのは…」のような普通の文章は全く校正されない
-  - Gemini ならば文脈を理解して Markdown 記号の除去や読みやすさ改善も行える
-- Gemini の JSON モード: `generationConfig.responseMimeType` を `"application/json"` に設定するだけで確実にJSON返却される
-- `temperature: 0.3` (校正) vs `0.7` (コンテンツ生成) で用途に応じた創造性調整
+### 1. SDK がプロキシ環境で動作しない
+- `@google/generative-ai` SDK の内部 `fetch()` は `HTTPS_PROXY` を無視する
+- 解決: SDKを削除し、`https` モジュール + `https-proxy-agent` でREST直接呼び出しに変更
+
+### 2. コンセプトの取り違え（校正 vs 発展）
+- 最初は「AI校正」= 文法・表現の修正と理解して実装
+- 実際にユーザーが求めていたのは「短いメモをチームで活用できるナレッジに発展させる」こと
+- 教訓: AI機能を実装する前に、「AIにどこまで変えてほしいか」をユーザーに確認する
+
+### 3. フォールバックが目立たない
+- APIキー未設定でもシミュレーションが動き、一見正常に見える
+- 解決: レスポンスに `source` フィールドを追加し、UIでシミュレーションモードを明示
+
+### 4. Claude Code環境からGemini APIに接続不可
+- `generativelanguage.googleapis.com` がリモート環境レベルでブロックされている（403）
+- コードは正しいがテスト不可 → ユーザーのローカル環境で動作確認
 
 ## 次回の注意点
 
 - `.env.local` に `GEMINI_API_KEY` を設定しないとフォールバック動作になる
-- Gemini API のレート制限（無料枠: 15 RPM）に注意。大量のバリアント生成時はシーケンシャル処理
-- プロンプトの日本語校正ルールは実運用フィードバックで調整が必要になる可能性がある
-- `categorize/route.ts` もGemini対応すると一貫性が向上する
+- サーバー再起動が必要（`.env.local` 変更後）
+- Gemini API のレート制限（無料枠: 15 RPM）に注意
+- プロンプトの発展ルールは実運用フィードバックで調整が必要
+- AI機能のコンセプトは実装前にユーザーと合意する

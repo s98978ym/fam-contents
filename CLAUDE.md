@@ -12,6 +12,7 @@
 - **スタイリング:** Tailwind CSS 4.1 + PostCSS
 - **データストア:** インメモリストア (`src/lib/store.ts`)。DB移行を前提とした設計
 - **状態管理:** React Context API (`UserProvider`, `TeamProvider`) + `useState`。外部ライブラリ不使用
+- **AI API:** Gemini API (REST直接呼び出し, `gemini-2.0-flash`)。`src/lib/gemini.ts` で共通クライアント提供
 - **パッケージマネージャ:** npm
 
 ### ディレクトリ構成
@@ -26,13 +27,13 @@ src/
 │   │   ├── reviews/         #   レビュー CRUD
 │   │   ├── publish-jobs/    #   公開ジョブ CRUD
 │   │   ├── metrics/         #   メトリクス取得
-│   │   ├── knowledge/       #   ナレッジ共有 CRUD + AI校正 + カテゴリ分類
+│   │   ├── knowledge/       #   ナレッジ共有 CRUD + AIナレッジ発展 + カテゴリ分類
 │   │   ├── drive/           #   Google Drive連携 (フォルダ・ファイル)
 │   │   ├── audit-logs/      #   監査ログ取得
 │   │   └── prompt-versions/ #   プロンプトバージョン管理
 │   ├── campaigns/           # キャンペーン管理ページ
 │   ├── contents/            # コンテンツ一覧・詳細・生成ページ
-│   ├── knowledge/           # ナレッジ共有ページ (QuickPostBox, NewPostForm, AI校正)
+│   ├── knowledge/           # ナレッジ共有ページ (QuickPostBox, NewPostForm, AIナレッジ発展)
 │   ├── reviews/             # レビュー管理ページ
 │   ├── publish-jobs/        # 公開ジョブ管理ページ
 │   ├── prompt-versions/     # プロンプトバージョン管理ページ
@@ -47,6 +48,7 @@ src/
 │   └── team-context.tsx     # チーム管理 Context (CRUD, メンバー, アーカイブ, ゴミ箱)
 ├── lib/
 │   ├── store.ts             # インメモリCRUDストア + 監査ログ
+│   ├── gemini.ts            # Gemini API クライアント (REST + プロキシ対応)
 │   ├── drive_store.ts       # Google Drive連携モック
 │   ├── sample_data.ts       # サンプルデータ
 │   └── user_context.tsx     # ユーザー選択 Context (localStorage永続化)
@@ -184,15 +186,25 @@ UIラベル・プレースホルダー・ヒントテキストはすべて**日�
 
 | コンポーネント | 役割 |
 |---------------|------|
-| `QuickPostBox` | フィード上部のカジュアル投稿エリア。CSS Gridアニメーションで展開、AI校正対応 |
-| `NewPostForm` | 詳細投稿モーダル。タイトル・本文・カテゴリ・タグ・画像、AI校正対応 |
+| `QuickPostBox` | フィード上部のカジュアル投稿エリア。CSS Gridアニメーションで展開、AIナレッジ発展対応 |
+| `NewPostForm` | 詳細投稿モーダル。タイトル・本文・カテゴリ・タグ・画像、AIナレッジ発展対応 |
 | `KnowledgePage` | メインページ。カテゴリフィルタ、検索、スコープ切替（全体/チーム/個人）|
 
-**AI校正フロー:**
-1. 本文入力 → 「AIで校正」ボタン
-2. `/api/knowledge/proofread` で文章校正 + タグ提案 + カテゴリ自動分類
-3. 縦積み比較表示（元の文章 vs 校正後）＋タグ・カテゴリ提案パネル
-4. 「すべて適用」で本文・タグ・カテゴリを一括適用
+**AIナレッジ発展フロー:**
+1. 本文入力 → 「AIで発展」ボタン
+2. `/api/knowledge/proofread` でGemini APIを呼び出し、ナレッジ発展 + タグ提案 + カテゴリ自動分類
+3. Gemini プロンプトの4ステップ思考プロセス:
+   - Step 1: 趣旨の把握（筆者の核心的な主張・気づきを特定）
+   - Step 2: 必要な観点の特定（ナレッジとして不足している観点を洗い出す）
+   - Step 3: 補強コンテンツの検討（数値・事例・実践ステップ・注意点を追加）
+   - Step 4: 発展テキストの生成（元の趣旨を核に補強を組み込む）
+4. 縦積み比較表示（元の文章 vs AIが発展）＋タグ・カテゴリ提案パネル
+5. 「すべて適用」で本文・タグ・カテゴリを一括適用
+
+**重要: 「校正」ではなく「発展」**
+- 目的は文法修正ではなく、短いメモ・気づきをチーム全体で活用できるナレッジに発展させること
+- 元の趣旨・主張は絶対に変えない。あくまで「補強・発展」であり「書き換え」ではない
+- 元テキストの2〜3倍程度の分量を目安にする
 
 ### `channel_forms.tsx` (~34KB)
 
@@ -218,6 +230,16 @@ UIラベル・プレースホルダー・ヒントテキストはすべて**日�
 
 提供ストア: `contentStore`, `campaignStore`, `variantStore`, `reviewStore`, `publishJobStore`, `metricStore`, `promptVersionStore`, `auditStore`, `knowledgePostStore`, `knowledgeCommentStore`
 
+### `lib/gemini.ts`
+
+Gemini API クライアント。`https` モジュール + `https-proxy-agent` でREST直接呼び出し。
+
+- `isGeminiAvailable` — APIキー設定有無のフラグ
+- `generateText(prompt, options)` — テキスト生成
+- `generateJSON<T>(prompt, options)` — JSON モード生成（`responseMimeType: "application/json"`）
+- プロキシ対応: `HTTPS_PROXY` 環境変数があれば `HttpsProxyAgent` を使用
+- フォールバック設計: API未設定・エラー時はシミュレーションにフォールバック（各APIルートで実装）
+
 ### `contexts/team-context.tsx`
 
 チーム管理Context。チーム CRUD、メンバー管理、キャンペーン/コンテンツ割当、アーカイブ、ゴミ箱（保持期間付き）、表示フィルタリング。localStorage永続化。
@@ -238,6 +260,33 @@ UIラベル・プレースホルダー・ヒントテキストはすべて**日�
 | API送信時のフィールド欠落 | `team_id` など必要フィールドの送信忘れ | API呼び出し前にマッピング定数（例: `USER_TEAM_MAP`）でフィールド補完 |
 | AI校正の `changes_made` 判定漏れ | テキスト差分のみチェックし、タグ・カテゴリ提案を含めていなかった | `textChanged \|\| hasTags \|\| categoryMeaningful` の3条件をOR |
 | 比較UIの全文非表示 | `grid-cols-2` + 固定高さ（`h-28`）で文章が切れる | 縦積み (`space-y-2`) + 自動高さで全文表示 |
+| AI機能のコンセプト違い（校正 vs 発展） | ユーザーが求めるAI機能の目的を確認せず、「校正（文法修正）」として実装してしまった。実際は「短いメモをナレッジに発展」だった | AI機能を実装する前に、ユーザーに「AIにどこまで変えてほしいか」（修正/補強/発展/書き換え）を必ず確認する。プロンプトの役割設定（role）を最初に合意する |
+| Gemini SDK がプロキシ非対応 | `@google/generative-ai` SDKの内部 `fetch()` は `HTTPS_PROXY` を無視する。プロキシ環境で接続不可 | SDKを使わず `https` モジュール + `https-proxy-agent` でREST直接呼び出しを使う |
+| `.env.local` 未作成で API 未接続 | APIキーを `.env.local` に設定しないとフォールバック（シミュレーション）が動作し、一見動いているように見える | `.env.local.example` を用意し、セットアップ手順に記載。`isGeminiAvailable` フラグでログ出力し、フォールバック動作時はコンソールに明示する |
+| フォールバックが弱すぎて違いがわからない | regex ベースのシミュレーションが `**` 除去程度しかせず、「変更なし」と誤判定 | フォールバックでも意味のある変換をするか、フォールバック動作中であることをUIに明示する |
+
+---
+
+## Gemini API 統合ルール
+
+### 接続方式
+
+- **SDK不使用**: `@google/generative-ai` は使わない。プロキシ環境で動作しないため
+- **REST直接呼び出し**: `https` モジュール + `https-proxy-agent` で `generativelanguage.googleapis.com` に直接リクエスト
+- **環境変数**: `GEMINI_API_KEY` を `.env.local` に設定。未設定時はフォールバック
+
+### フォールバック設計
+
+- 全てのGemini API呼び出しは `try-catch` でラップし、エラー時はフォールバック処理を実行
+- フォールバック時もレスポンス構造は同一にする（呼び出し元で分岐不要）
+- `isGeminiAvailable` でAPI利用可否を事前判定し、不要なAPI呼び出しを避ける
+
+### プロンプト設計
+
+- **役割（role）を明確に設定**: 「シニアナレッジエディター」「マルチチャネル運用プロフェッショナル」等
+- **思考プロセスを段階的に指示**: Step 1→2→3→4 の構造で、AIの思考を誘導する
+- **出力形式をJSON schema で厳密に指定**: `responseMimeType: "application/json"` + プロンプト内にJSON構造を明記
+- **temperature の使い分け**: 校正・修正は0.3、発展・生成は0.7
 
 ---
 
