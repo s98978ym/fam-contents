@@ -28,6 +28,21 @@ const AVATAR_COLORS: Record<string, string> = {
 };
 
 type TimePeriod = "all" | "today" | "week" | "month";
+type ViewScope = "all" | "team" | "personal";
+
+// ユーザーとチームのマッピング（実際にはAPIから取得）
+const USER_TEAM_MAP: Record<string, string> = {
+  田中: "team_001",
+  佐藤: "team_001",
+  鈴木: "team_002",
+  山田: "team_002",
+  高橋: "team_001",
+};
+
+const TEAM_NAMES: Record<string, string> = {
+  team_001: "マーケティング",
+  team_002: "コンテンツ",
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -768,6 +783,10 @@ export default function KnowledgePage() {
   const [selectedCategory, setSelectedCategory] = useState<KnowledgeCategory | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all");
+  const [viewScope, setViewScope] = useState<ViewScope>("all");
+
+  // Current user's team
+  const currentUserTeam = currentUser ? USER_TEAM_MAP[currentUser] : null;
 
   // New post form
   const [showNewPost, setShowNewPost] = useState(false);
@@ -837,6 +856,17 @@ export default function KnowledgePage() {
   const filteredPosts = useMemo(() => {
     let result = [...posts];
 
+    // View scope filter
+    if (viewScope === "personal" && currentUser) {
+      result = result.filter((p) => p.author === currentUser);
+    } else if (viewScope === "team" && currentUserTeam) {
+      result = result.filter((p) => {
+        // 投稿者のチームが自分と同じか、投稿のteam_idが自分のチームか
+        const authorTeam = USER_TEAM_MAP[p.author];
+        return authorTeam === currentUserTeam || p.team_id === currentUserTeam;
+      });
+    }
+
     // Time period
     result = result.filter((p) => isWithinPeriod(p.created_at, timePeriod));
 
@@ -866,7 +896,7 @@ export default function KnowledgePage() {
     result.sort((a, b) => b.created_at.localeCompare(a.created_at));
 
     return result;
-  }, [posts, searchQuery, selectedCategory, selectedTag, timePeriod]);
+  }, [posts, searchQuery, selectedCategory, selectedTag, timePeriod, viewScope, currentUser, currentUserTeam]);
 
   // Handlers
   const handleLike = async (postId: string) => {
@@ -922,6 +952,7 @@ export default function KnowledgePage() {
     setSelectedCategory(null);
     setSelectedTag(null);
     setSearchQuery("");
+    setViewScope("all");
   };
 
   if (loading) {
@@ -932,12 +963,12 @@ export default function KnowledgePage() {
     );
   }
 
-  const hasActiveFilter = selectedCategory || selectedTag || searchQuery;
+  const hasActiveFilter = selectedCategory || selectedTag || searchQuery || viewScope !== "all";
 
   return (
     <div className="max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">ナレッジ共有</h1>
           <p className="text-sm text-gray-500 mt-0.5">チーム横断でノウハウやTipsを発見・共有</p>
@@ -951,6 +982,60 @@ export default function KnowledgePage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
           詳細に書く
+        </button>
+      </div>
+
+      {/* Scope Tabs */}
+      <div className="flex items-center gap-1 mb-6 border-b border-gray-200">
+        <button
+          onClick={() => setViewScope("all")}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            viewScope === "all"
+              ? "border-blue-500 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          }`}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            全体
+          </span>
+        </button>
+        <button
+          onClick={() => setViewScope("team")}
+          disabled={!currentUserTeam}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            viewScope === "team"
+              ? "border-green-500 text-green-600"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          }`}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            チーム
+            {currentUserTeam && (
+              <span className="text-xs text-gray-400">({TEAM_NAMES[currentUserTeam]})</span>
+            )}
+          </span>
+        </button>
+        <button
+          onClick={() => setViewScope("personal")}
+          disabled={!currentUser}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            viewScope === "personal"
+              ? "border-purple-500 text-purple-600"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          }`}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            自分の投稿
+          </span>
         </button>
       </div>
 
