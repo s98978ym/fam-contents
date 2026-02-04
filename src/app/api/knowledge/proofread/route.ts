@@ -254,6 +254,8 @@ export async function POST(request: Request) {
     const titleStr = typeof title === "string" ? title : "";
 
     // Gemini API が利用可能なら本物のAI発展、なければシミュレーション
+    let fallbackReason = "";
+
     if (isGeminiAvailable) {
       try {
         console.log("[proofread] Gemini API を使用してナレッジ発展を実行...");
@@ -272,11 +274,13 @@ export async function POST(request: Request) {
           source: "gemini",
         });
       } catch (err) {
-        console.error("[proofread] Gemini API エラー、シミュレーションにフォールバック:", err);
-        // Gemini がエラーの場合はフォールバック
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error("[proofread] Gemini API エラー、シミュレーションにフォールバック:", errMsg);
+        fallbackReason = `Gemini APIエラー: ${errMsg}`;
       }
     } else {
       console.log("[proofread] GEMINI_API_KEY 未設定のためシミュレーションモードで動作");
+      fallbackReason = "GEMINI_API_KEY が未設定です";
     }
 
     // フォールバック: シミュレーション
@@ -296,6 +300,7 @@ export async function POST(request: Request) {
       suggested_tags: suggestedTags,
       suggested_category: suggestedCategory,
       source: "simulation",
+      fallback_reason: fallbackReason,
     });
   } catch {
     return NextResponse.json(

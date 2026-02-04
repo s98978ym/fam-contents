@@ -372,6 +372,7 @@ function QuickPostBox({
   const [isProofreading, setIsProofreading] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
   const [proofreadSource, setProofreadSource] = useState<"gemini" | "simulation" | null>(null);
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
 
   const placeholders = [
     "今日学んだことや気づきをシェアしよう",
@@ -481,6 +482,7 @@ function QuickPostBox({
         setSuggestedTags(data.suggested_tags || []);
         setSuggestedCategory(data.suggested_category || null);
         setProofreadSource(data.source || null);
+        setFallbackReason(data.fallback_reason || null);
         setShowComparison(true);
       }
     } catch (e) {
@@ -552,6 +554,7 @@ function QuickPostBox({
                 {proofreadSource === "simulation" && (
                   <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
                     <p className="text-xs text-amber-700">Gemini API未接続のためシミュレーションモードです。環境変数 GEMINI_API_KEY を設定し、再デプロイしてください。</p>
+                    {fallbackReason && <p className="text-[10px] text-amber-600 mt-1">詳細: {fallbackReason}</p>}
                   </div>
                 )}
                 {proofreadText !== body ? (
@@ -834,6 +837,7 @@ function NewPostForm({
   const [isProofreading, setIsProofreading] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
   const [proofreadSource, setProofreadSource] = useState<"gemini" | "simulation" | null>(null);
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!title.trim() || !body.trim() || submitting) return;
@@ -860,6 +864,7 @@ function NewPostForm({
         setSuggestedTags(data.suggested_tags || []);
         setSuggestedCategory(data.suggested_category || null);
         setProofreadSource(data.source || null);
+        setFallbackReason(data.fallback_reason || null);
         setShowComparison(true);
       }
     } catch (e) {
@@ -976,6 +981,7 @@ function NewPostForm({
                   {proofreadSource === "simulation" && (
                     <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
                       <p className="text-xs text-amber-700">Gemini API未接続のためシミュレーションモードです。環境変数 GEMINI_API_KEY を設定し、再デプロイしてください。</p>
+                      {fallbackReason && <p className="text-[10px] text-amber-600 mt-1">詳細: {fallbackReason}</p>}
                     </div>
                   )}
                   {/* 文章比較 */}
