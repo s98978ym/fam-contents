@@ -364,6 +364,13 @@ function QuickPostBox({
   const [category, setCategory] = useState<KnowledgeCategory>("tips");
   const [submitting, setSubmitting] = useState(false);
 
+  // AI校正関連のstate
+  const [proofreadText, setProofreadText] = useState<string | null>(null);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [suggestedCategory, setSuggestedCategory] = useState<KnowledgeCategory | null>(null);
+  const [isProofreading, setIsProofreading] = useState(false);
+  const [showComparison, setShowComparison] = useState(false);
+
   const placeholders = [
     "今日学んだことや気づきをシェアしよう",
     "うまくいったコツを共有しよう",
@@ -384,7 +391,7 @@ function QuickPostBox({
     await onSubmit({
       title,
       body: body.trim(),
-      tags: [],
+      tags: suggestedTags,
       category,
       images: [],
     });
@@ -392,6 +399,58 @@ function QuickPostBox({
     setBody("");
     setIsExpanded(false);
     setSubmitting(false);
+    setProofreadText(null);
+    setSuggestedTags([]);
+    setSuggestedCategory(null);
+    setShowComparison(false);
+  };
+
+  // AI校正を実行
+  const handleProofread = async () => {
+    if (!body.trim() || isProofreading) return;
+    setIsProofreading(true);
+    try {
+      const lines = body.trim().split("\n");
+      const autoTitle = lines[0].slice(0, 30);
+      const res = await fetch("/api/knowledge/proofread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: body, title: autoTitle }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProofreadText(data.proofread ?? body);
+        setSuggestedTags(data.suggested_tags || []);
+        setSuggestedCategory(data.suggested_category || null);
+        setShowComparison(true);
+      }
+    } catch (e) {
+      console.error("Proofreading failed:", e);
+    } finally {
+      setIsProofreading(false);
+    }
+  };
+
+  // 校正後のテキスト・タグ・カテゴリを適用
+  const applyProofreadResult = () => {
+    if (proofreadText) {
+      setBody(proofreadText);
+    }
+    if (suggestedCategory) {
+      setCategory(suggestedCategory);
+    }
+    // suggestedTags はそのまま保持（送信時に含める）
+    setProofreadText(null);
+    setSuggestedCategory(null);
+    setShowComparison(false);
+  };
+
+  // 比較表示を閉じる
+  const closeComparison = () => {
+    setShowComparison(false);
+    setProofreadText(null);
+    setSuggestedTags([]);
+    setSuggestedCategory(null);
   };
 
   const color = AVATAR_COLORS[currentUser] || "bg-gray-500";
@@ -450,16 +509,104 @@ function QuickPostBox({
                 {currentUser.slice(0, 2)}
               </div>
               <div className="flex-1">
-                <textarea
-                  autoFocus
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  placeholder="気軽にナレッジを共有しよう！"
-                  rows={4}
-                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none text-gray-700 shadow-sm"
-                />
+                {/* 比較表示モード */}
+                {showComparison && proofreadText ? (
+                  <div className="space-y-3">
+                    {proofreadText !== body ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div onClick={closeComparison} className="cursor-pointer group">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="text-xs font-medium text-gray-500">元の文章</span>
+                          </div>
+                          <div className="h-28 p-3 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap group-hover:border-gray-300 transition-colors">
+                            {body}
+                          </div>
+                          <p className="text-[10px] text-gray-400 mt-1 text-center group-hover:text-gray-500">クリックで元のまま編集を続ける</p>
+                        </div>
+                        <div onClick={applyProofreadResult} className="cursor-pointer group">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="text-xs font-medium text-purple-600">校正後</span>
+                            <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
+                          </div>
+                          <div className="h-28 p-3 border-2 border-purple-300 rounded-lg bg-purple-50 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100 transition-colors">
+                            {proofreadText}
+                          </div>
+                          <p className="text-[10px] text-purple-500 mt-1 text-center group-hover:text-purple-600">クリックですべて適用</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <p className="text-xs text-gray-500">文章の修正はありません。以下のタグ・カテゴリ提案を確認してください。</p>
+                      </div>
+                    )}
+
+                    {(suggestedTags.length > 0 || suggestedCategory) && (
+                      <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <p className="text-xs font-medium text-purple-700 mb-2">AIが提案する設定</p>
+                        {suggestedCategory && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[11px] text-purple-600">カテゴリ:</span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${CATEGORY_CONFIG[suggestedCategory].bgColor} ${CATEGORY_CONFIG[suggestedCategory].color}`}>
+                              {CATEGORY_CONFIG[suggestedCategory].icon} {CATEGORY_CONFIG[suggestedCategory].label}
+                            </span>
+                            {suggestedCategory !== category && (
+                              <span className="text-[10px] text-purple-400">← {CATEGORY_CONFIG[category].label} から変更</span>
+                            )}
+                          </div>
+                        )}
+                        {suggestedTags.length > 0 && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] text-purple-600">タグ:</span>
+                            {suggestedTags.map((tag) => (
+                              <span key={tag} className="px-2 py-0.5 bg-white text-purple-700 rounded text-xs border border-purple-200">
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3 mt-3 pt-2 border-t border-purple-200">
+                          <button
+                            type="button"
+                            onClick={applyProofreadResult}
+                            className="px-4 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                          >
+                            すべて適用
+                          </button>
+                          <button
+                            type="button"
+                            onClick={closeComparison}
+                            className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                          >
+                            適用しない
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <textarea
+                    autoFocus
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    placeholder="気軽にナレッジを共有しよう！"
+                    rows={4}
+                    className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none text-gray-700 shadow-sm"
+                  />
+                )}
               </div>
             </div>
+
+            {/* 適用済みタグ表示 */}
+            {!showComparison && suggestedTags.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap ml-14 mb-2">
+                <span className="text-[11px] text-purple-500">タグ:</span>
+                {suggestedTags.map((tag) => (
+                  <span key={tag} className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs border border-purple-200">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* カテゴリ選択 */}
             <div className="flex items-center gap-2 flex-wrap ml-14 mb-3">
@@ -494,18 +641,49 @@ function QuickPostBox({
 
             {/* アクションボタン */}
             <div className="flex items-center justify-between ml-14">
-              <button
-                onClick={() => {
-                  setIsExpanded(false);
-                  setBody("");
-                }}
-                className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                キャンセル
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setIsExpanded(false);
+                    setBody("");
+                    setProofreadText(null);
+                    setSuggestedTags([]);
+                    setSuggestedCategory(null);
+                    setShowComparison(false);
+                  }}
+                  className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  キャンセル
+                </button>
+                {!showComparison && (
+                  <button
+                    type="button"
+                    onClick={handleProofread}
+                    disabled={!body.trim() || isProofreading}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-white/70 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-purple-200"
+                  >
+                    {isProofreading ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        校正中...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        AIで校正
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
               <button
                 onClick={handleSubmit}
-                disabled={!body.trim() || submitting}
+                disabled={!body.trim() || submitting || showComparison}
                 className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-sm font-semibold rounded-full hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
               >
                 {submitting ? (
