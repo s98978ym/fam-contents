@@ -3,38 +3,55 @@
 ## プロジェクト概要
 
 **FAM Content Ops** — マルチチャネル向けコンテンツ生成・管理システム。
-素材（議事録・台本・写真など）をアップロードし、AIで各チャネル向けコンテンツを生成・プレビュー・編集・公開する。
+素材（議事録・台本・写真など）をアップロードし、AIで各チャネル向けコンテンツを生成・プレビュー・編集・公開する。ナレッジ共有・チーム管理機能も備える。
 
 ### 技術スタック
 
-- **フレームワーク:** Next.js 16 (App Router) + React 19
-- **言語:** TypeScript 5 (strict mode)
-- **スタイリング:** Tailwind CSS 4 + PostCSS
+- **フレームワーク:** Next.js 16.1.6 (App Router) + React 19.2
+- **言語:** TypeScript 5.9 (strict mode)
+- **スタイリング:** Tailwind CSS 4.1 + PostCSS
 - **データストア:** インメモリストア (`src/lib/store.ts`)。DB移行を前提とした設計
+- **状態管理:** React Context API (`UserProvider`, `TeamProvider`) + `useState`。外部ライブラリ不使用
 - **パッケージマネージャ:** npm
 
 ### ディレクトリ構成
 
 ```
 src/
-├── app/                  # Next.js App Router (ページ + APIルート)
-│   ├── api/              # RESTful APIルート (contents, campaigns, reviews, etc.)
-│   ├── campaigns/        # キャンペーン管理ページ
-│   ├── contents/         # コンテンツ一覧・詳細ページ
-│   ├── reviews/          # レビュー管理
-│   ├── publish-jobs/     # 公開ジョブ管理
-│   ├── prompt-versions/  # プロンプトバージョン管理
-│   ├── layout.tsx        # ルートレイアウト
-│   └── page.tsx          # ダッシュボード
+├── app/                     # Next.js App Router (ページ + APIルート)
+│   ├── api/                 # RESTful APIルート
+│   │   ├── contents/        #   コンテンツ CRUD + AI生成
+│   │   ├── campaigns/       #   キャンペーン CRUD
+│   │   ├── variants/        #   チャネルバリアント一覧
+│   │   ├── reviews/         #   レビュー CRUD
+│   │   ├── publish-jobs/    #   公開ジョブ CRUD
+│   │   ├── metrics/         #   メトリクス取得
+│   │   ├── knowledge/       #   ナレッジ共有 CRUD + AI校正 + カテゴリ分類
+│   │   ├── drive/           #   Google Drive連携 (フォルダ・ファイル)
+│   │   ├── audit-logs/      #   監査ログ取得
+│   │   └── prompt-versions/ #   プロンプトバージョン管理
+│   ├── campaigns/           # キャンペーン管理ページ
+│   ├── contents/            # コンテンツ一覧・詳細・生成ページ
+│   ├── knowledge/           # ナレッジ共有ページ (QuickPostBox, NewPostForm, AI校正)
+│   ├── reviews/             # レビュー管理ページ
+│   ├── publish-jobs/        # 公開ジョブ管理ページ
+│   ├── prompt-versions/     # プロンプトバージョン管理ページ
+│   ├── teams/               # チーム管理 + チーム利用状況分析ページ
+│   ├── layout.tsx           # ルートレイアウト (TeamProvider, UserProvider, Sidebar)
+│   └── page.tsx             # ダッシュボード
 ├── components/
 │   ├── content_wizard.tsx   # メインウィザード (ファイル登録→設定→生成→プレビュー→保存)
-│   └── channel_forms.tsx    # チャネル別フォーム
+│   ├── channel_forms.tsx    # チャネル別フォーム
+│   └── sidebar.tsx          # ナビゲーションサイドバー + チーム切替 + ユーザーバッジ
+├── contexts/
+│   └── team-context.tsx     # チーム管理 Context (CRUD, メンバー, アーカイブ, ゴミ箱)
 ├── lib/
 │   ├── store.ts             # インメモリCRUDストア + 監査ログ
-│   ├── drive_store.ts       # Google Drive連携
-│   └── sample_data.ts       # サンプルデータ
+│   ├── drive_store.ts       # Google Drive連携モック
+│   ├── sample_data.ts       # サンプルデータ
+│   └── user_context.tsx     # ユーザー選択 Context (localStorage永続化)
 └── types/
-    └── content_package.ts   # ドメイン型定義 (Channel, ContentStatus, etc.)
+    └── content_package.ts   # ドメイン型定義
 ```
 
 ### 開発環境のセットアップ
@@ -54,12 +71,14 @@ npm run lint    # Next.js組み込みESLint
 
 | 対象 | 規則 | 例 |
 |------|------|----|
-| コンポーネント | PascalCase | `StepFiles`, `ReelsPreview`, `PhoneFrame` |
-| 関数 | camelCase | `categorizeFiles`, `getPromptType` |
-| 定数 | UPPER_SNAKE_CASE | `CHANNEL_OPTIONS`, `TASTE_OPTIONS` |
-| 型・インターフェース | PascalCase | `FileEntry`, `GenerationSettings` |
+| コンポーネント | PascalCase | `StepFiles`, `ReelsPreview`, `PhoneFrame`, `QuickPostBox` |
+| 関数 | camelCase | `categorizeFiles`, `getPromptType`, `handleProofread` |
+| 定数 | UPPER_SNAKE_CASE | `CHANNEL_OPTIONS`, `CATEGORY_CONFIG`, `AVATAR_COLORS` |
+| 型・インターフェース | PascalCase | `FileEntry`, `KnowledgePost`, `ContentPackage` |
 | ファイル (コンポーネント) | snake_case.tsx | `content_wizard.tsx`, `channel_forms.tsx` |
+| ファイル (コンテキスト) | snake_case.tsx | `team-context.tsx`, `user_context.tsx` |
 | ページ | Next.js規約 (`page.tsx`) | `contents/[id]/page.tsx` |
+| APIルート | Next.js規約 (`route.ts`) | `api/knowledge/proofread/route.ts` |
 
 ### import文の順序・パスエイリアス
 
@@ -67,12 +86,15 @@ npm run lint    # Next.js組み込みESLint
 
 ```typescript
 // 1. React/Next.js
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { NextResponse } from "next/server";
+import Link from "next/link";
 
 // 2. 内部モジュール (@/ エイリアス)
 import { contentStore } from "@/lib/store";
-import type { Channel } from "@/types/content_package";
+import { useCurrentUser } from "@/lib/user_context";
+import { useTeam } from "@/contexts/team-context";
+import type { Channel, KnowledgeCategory } from "@/types/content_package";
 ```
 
 ### コンポーネント設計パターン
@@ -86,6 +108,8 @@ import type { Channel } from "@/types/content_package";
   ```
 - ローカルUIヘルパー (`Label`, `Input`, `Textarea`) はファイル内で定義し、再利用
 - 状態管理は `useState` フック。グローバル状態ライブラリは不使用
+- Context API: `UserProvider` (ユーザー選択), `TeamProvider` (チーム管理)
+- localStorage永続化: ユーザー選択 (`fam_current_user`), チームデータ (`fam_teams`)
 - フォームの更新パターン:
   ```typescript
   const [form, setForm] = useState({ field1: "", field2: "" });
@@ -108,14 +132,21 @@ export async function POST(request: Request) {
 
 ### スタイリング
 
-Tailwind CSSユーティリティクラスを直接JSXに記述。グローバルCSSは最小限。
+Tailwind CSSユーティリティクラスを直接JSXに記述。グローバルCSSは最小限（`globals.css`はTailwind importのみ）。
 
 ```jsx
 // ボタン
 className="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
 // カード
 className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm"
+// グラデーション装飾
+className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50"
 ```
+
+**アニメーション手法:**
+- 高さアニメーション: CSS Grid `grid-template-rows: 0fr → 1fr` を使用（`height: auto` はCSS transitionで不可）
+- テキストエリア展開: 明示ピクセル高さ（state管理）+ `transition-all duration-300`
+- 要素の出現: `transition-opacity` + `opacity-0/100`
 
 ### UI言語
 
@@ -125,7 +156,7 @@ UIラベル・プレースホルダー・ヒントテキストはすべて**日�
 
 ## 主要コンポーネントの設計方針
 
-### `content_wizard.tsx` (1,317行)
+### `content_wizard.tsx` (~77KB)
 
 マルチステップウィザード。コンテンツ生成の全フローを管理する中核コンポーネント。
 
@@ -147,23 +178,66 @@ UIラベル・プレースホルダー・ヒントテキストはすべて**日�
 
 **デバイスフレーム:** `PhoneFrame`, `BrowserFrame`, `LineChatFrame`
 
-### `channel_forms.tsx` (557行)
+### `knowledge/page.tsx` (~71KB)
+
+ナレッジ共有ページ。チーム内の知見を投稿・閲覧・検索する。
+
+| コンポーネント | 役割 |
+|---------------|------|
+| `QuickPostBox` | フィード上部のカジュアル投稿エリア。CSS Gridアニメーションで展開、AI校正対応 |
+| `NewPostForm` | 詳細投稿モーダル。タイトル・本文・カテゴリ・タグ・画像、AI校正対応 |
+| `KnowledgePage` | メインページ。カテゴリフィルタ、検索、スコープ切替（全体/チーム/個人）|
+
+**AI校正フロー:**
+1. 本文入力 → 「AIで校正」ボタン
+2. `/api/knowledge/proofread` で文章校正 + タグ提案 + カテゴリ自動分類
+3. 縦積み比較表示（元の文章 vs 校正後）＋タグ・カテゴリ提案パネル
+4. 「すべて適用」で本文・タグ・カテゴリを一括適用
+
+### `channel_forms.tsx` (~34KB)
 
 チャネルごとの入力フォーム。`InstagramReelsForm`, `InstagramStoriesForm`, `InstagramFeedForm`, `EventLPForm`, `NoteForm`, `LINEForm` をエクスポート。
 
+### `sidebar.tsx` (~12KB)
+
+ナビゲーションサイドバー。`TeamSwitcher`（チーム切替UI）、`CurrentUserBadge`（ユーザーバッジ）、各ページへのナビリンクを含む。
+
 ### `types/content_package.ts`
 
-ドメインモデルの型定義。`Channel`, `ContentStatus`, `Objective`, `FunnelStage`, `ContentPackage` など。
+ドメインモデルの型定義。主要な型:
+- `Channel` — 6チャネル: `instagram_reels`, `instagram_stories`, `instagram_feed`, `event_lp`, `note`, `line`
+- `ContentStatus` — `draft`, `review`, `approved`, `published`, `archived`
+- `KnowledgeCategory` — `tips`, `howto`, `tool`, `process`, `insight`, `resource`, `announcement`, `other`
+- `ContentPackage` — コンテンツ本体（メッセージング、CTA、アセット計画、配信設定）
+- `ChannelVariant` — チャネル別出力データ
+- `KnowledgePost` / `KnowledgeComment` — ナレッジ投稿・コメント
 
 ### `lib/store.ts`
 
-インメモリCRUDストア。`contentStore`, `campaignStore`, `variantStore`, `reviewStore`, `publishJobStore`, `metricStore`, `promptVersionStore`, `auditStore` を提供。全変更操作で監査ログを自動記録。
+インメモリCRUDストア。全変更操作で監査ログを自動記録。
+
+提供ストア: `contentStore`, `campaignStore`, `variantStore`, `reviewStore`, `publishJobStore`, `metricStore`, `promptVersionStore`, `auditStore`, `knowledgePostStore`, `knowledgeCommentStore`
+
+### `contexts/team-context.tsx`
+
+チーム管理Context。チーム CRUD、メンバー管理、キャンペーン/コンテンツ割当、アーカイブ、ゴミ箱（保持期間付き）、表示フィルタリング。localStorage永続化。
+
+### `lib/user_context.tsx`
+
+ユーザー選択Context。ユーザー切替、利用可能ユーザーの自動検出（サンプルデータから）、localStorage永続化。
 
 ---
 
 ## よくあるミスと対策
 
-_(今後の開発で得た知見をここに追記していく)_
+| ミス | 原因 | 対策 |
+|------|------|------|
+| CSS `height: auto` トランジション不可 | CSS は `height: Xpx → auto` をアニメーションできない | CSS Grid `grid-template-rows: 0fr → 1fr` を使うか、明示ピクセル値をstateで管理 |
+| `max-height` トランジションが不自然 | `max-height: 0 → 600px` だと実コンテンツ高に関係なくタイミングが分散 | CSS Grid `grid-template-rows` を優先。`max-height` は避ける |
+| サンプルデータの未来タイムスタンプ | `sample_data.ts` の日付が現在時刻より未来の場合がある | 新規投稿の `created_at` を最新既存投稿 + 1秒に補正 |
+| API送信時のフィールド欠落 | `team_id` など必要フィールドの送信忘れ | API呼び出し前にマッピング定数（例: `USER_TEAM_MAP`）でフィールド補完 |
+| AI校正の `changes_made` 判定漏れ | テキスト差分のみチェックし、タグ・カテゴリ提案を含めていなかった | `textChanged \|\| hasTags \|\| categoryMeaningful` の3条件をOR |
+| 比較UIの全文非表示 | `grid-cols-2` + 固定高さ（`h-28`）で文章が切れる | 縦積み (`space-y-2`) + 自動高さで全文表示 |
 
 ---
 
