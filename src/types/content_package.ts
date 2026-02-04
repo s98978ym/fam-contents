@@ -132,3 +132,41 @@ export interface DesignManifest {
   export_name: string;
   format: "png" | "jpg" | "webp";
 }
+
+// ---------------------------------------------------------------------------
+// Knowledge Sharing (ナレッジ共有)
+// ---------------------------------------------------------------------------
+
+export type KnowledgeCategory =
+  | "tips"           // Tips・小技
+  | "howto"          // ハウツー
+  | "tool"           // ツール紹介
+  | "process"        // プロセス改善
+  | "insight"        // インサイト・気づき
+  | "resource"       // リソース・参考資料
+  | "announcement"   // お知らせ
+  | "other";         // その他
+
+export interface KnowledgePost {
+  id: string;
+  author: string;
+  team_id?: string;          // 所属チームID（任意）
+  title: string;
+  body: string;
+  images: string[];          // 画像URL配列
+  tags: string[];            // AIまたは手動で付与されたタグ
+  category: KnowledgeCategory;
+  ai_categorized: boolean;   // AIで自動分類されたか
+  ai_categorized_at?: string;
+  likes: string[];           // いいねしたユーザー名の配列
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeComment {
+  id: string;
+  post_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+}
