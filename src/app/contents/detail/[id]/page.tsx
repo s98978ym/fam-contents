@@ -30,6 +30,8 @@ interface ContentPackage {
   created_at: string;
   updated_at: string;
   created_by: string;
+  review_requested_to?: string;
+  review_requested_at?: string;
 }
 
 interface ChannelVariant {
@@ -113,7 +115,9 @@ export default function ContentDetailPage() {
   const [variants, setVariants] = useState<ChannelVariant[]>([]);
   const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -126,9 +130,39 @@ export default function ContentDetailPage() {
       setVariants(vars.filter((v: ChannelVariant) => v.content_id === contentId));
       setReviews(revs.filter((r: ReviewRecord) => r.content_id === contentId));
       setCampaigns(camps);
+      // Extract available users from variants and contents
+      const users = new Set<string>();
+      for (const v of vars) {
+        if (v.assignee) users.add(v.assignee);
+      }
+      for (const c of contents) {
+        if (c.created_by && !c.created_by.startsWith("planner_")) users.add(c.created_by);
+      }
+      setAvailableUsers(Array.from(users).sort());
       setLoading(false);
     });
   }, [contentId]);
+
+  const handleReviewRequestChange = async (newReviewer: string) => {
+    if (!content) return;
+    setUpdating(true);
+    try {
+      const res = await fetch(`/api/contents/${contentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          review_requested_to: newReviewer || null,
+          review_requested_at: newReviewer ? new Date().toISOString() : null,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setContent(updated);
+      }
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   if (loading) {
     return <div className="text-center py-16 text-gray-400">読み込み中...</div>;
@@ -187,6 +221,37 @@ export default function ContentDetailPage() {
           <div>
             <p className="text-xs text-gray-400 mb-1">作成者</p>
             <p className="text-sm font-medium text-gray-700">{content.created_by}</p>
+          </div>
+        </div>
+        {/* レビュー依頼者設定 */}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-xs text-gray-400 mb-1">レビュー依頼先</p>
+              <div className="flex items-center gap-3">
+                <select
+                  value={content.review_requested_to ?? ""}
+                  onChange={(e) => handleReviewRequestChange(e.target.value)}
+                  disabled={updating}
+                  className="px-3 py-1.5 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                >
+                  <option value="">未設定</option>
+                  {availableUsers.map((user) => (
+                    <option key={user} value={user}>
+                      {user}
+                    </option>
+                  ))}
+                </select>
+                {content.review_requested_to && content.review_requested_at && (
+                  <span className="text-xs text-gray-400">
+                    依頼日: {content.review_requested_at.slice(0, 10)}
+                  </span>
+                )}
+                {updating && (
+                  <span className="text-xs text-blue-500">更新中...</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
         <div className="mt-4 pt-4 border-t border-gray-100">

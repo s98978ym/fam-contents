@@ -201,6 +201,8 @@ export const sampleContents: ContentPackage[] = [
     created_at: "2026-02-01T09:00:00Z",
     updated_at: "2026-02-01T14:00:00Z",
     created_by: "田中",
+    review_requested_to: "佐藤",
+    review_requested_at: "2026-02-01T10:00:00Z",
   },
   {
     campaign_id: "camp_001",
@@ -224,6 +226,8 @@ export const sampleContents: ContentPackage[] = [
     created_at: "2026-02-02T10:00:00Z",
     updated_at: "2026-02-02T14:00:00Z",
     created_by: "田中",
+    review_requested_to: "鈴木",
+    review_requested_at: "2026-02-02T11:00:00Z",
   },
   {
     campaign_id: "camp_002",
@@ -293,6 +297,8 @@ export const sampleContents: ContentPackage[] = [
     created_at: "2026-02-06T10:00:00Z",
     updated_at: "2026-02-06T14:00:00Z",
     created_by: "鈴木",
+    review_requested_to: "田中",
+    review_requested_at: "2026-02-06T11:00:00Z",
   },
   {
     campaign_id: "camp_004",
@@ -409,6 +415,8 @@ export const sampleContents: ContentPackage[] = [
     created_at: "2026-02-11T09:00:00Z",
     updated_at: "2026-02-11T14:00:00Z",
     created_by: "佐藤",
+    review_requested_to: "田中",
+    review_requested_at: "2026-02-11T10:00:00Z",
   },
   {
     campaign_id: "camp_007",
@@ -455,6 +463,8 @@ export const sampleContents: ContentPackage[] = [
     created_at: "2026-02-13T10:00:00Z",
     updated_at: "2026-02-13T14:00:00Z",
     created_by: "佐藤",
+    review_requested_to: "鈴木",
+    review_requested_at: "2026-02-13T11:00:00Z",
   },
   {
     campaign_id: "camp_008",
@@ -547,6 +557,8 @@ export const sampleContents: ContentPackage[] = [
     created_at: "2026-02-17T10:00:00Z",
     updated_at: "2026-02-17T14:00:00Z",
     created_by: "田中",
+    review_requested_to: "佐藤",
+    review_requested_at: "2026-02-17T11:00:00Z",
   },
   {
     campaign_id: "camp_010",
@@ -616,6 +628,8 @@ export const sampleContents: ContentPackage[] = [
     created_at: "2026-02-20T09:00:00Z",
     updated_at: "2026-02-20T14:00:00Z",
     created_by: "田中",
+    review_requested_to: "佐藤",
+    review_requested_at: "2026-02-20T10:00:00Z",
   },
   {
     campaign_id: "camp_012",
@@ -685,6 +699,8 @@ export const sampleContents: ContentPackage[] = [
     created_at: "2026-02-23T09:00:00Z",
     updated_at: "2026-02-23T14:00:00Z",
     created_by: "田中",
+    review_requested_to: "鈴木",
+    review_requested_at: "2026-02-23T10:00:00Z",
   },
   {
     campaign_id: "camp_014",

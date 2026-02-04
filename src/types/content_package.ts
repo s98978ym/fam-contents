@@ -63,6 +63,10 @@ export interface ContentPackage {
   created_at: string;
   updated_at: string;
   created_by: string;
+  /** レビュー依頼先ユーザー名（任意） */
+  review_requested_to?: string;
+  /** レビュー依頼日時 */
+  review_requested_at?: string;
 }
 
 export interface ChannelVariant {
