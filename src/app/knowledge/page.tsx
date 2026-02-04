@@ -550,6 +550,8 @@ function NewPostForm({
 
   // AI校正関連のstate
   const [proofreadText, setProofreadText] = useState<string | null>(null);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [suggestedCategory, setSuggestedCategory] = useState<KnowledgeCategory | null>(null);
   const [isProofreading, setIsProofreading] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
 
@@ -570,15 +572,19 @@ function NewPostForm({
       const res = await fetch("/api/knowledge/proofread", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: body }),
+        body: JSON.stringify({ text: body, title }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.changes_made) {
           setProofreadText(data.proofread);
+          setSuggestedTags(data.suggested_tags || []);
+          setSuggestedCategory(data.suggested_category || null);
           setShowComparison(true);
         } else {
           setProofreadText(null);
+          setSuggestedTags([]);
+          setSuggestedCategory(null);
           setShowComparison(false);
         }
       }
@@ -589,19 +595,32 @@ function NewPostForm({
     }
   };
 
-  // 校正後のテキストを適用
-  const applyProofreadText = () => {
+  // 校正後のテキスト・タグ・カテゴリを適用
+  const applyProofreadResult = () => {
     if (proofreadText) {
       setBody(proofreadText);
-      setProofreadText(null);
-      setShowComparison(false);
     }
+    if (suggestedTags.length > 0) {
+      // 既存タグとマージ（重複排除）
+      const existing = tagsInput.split(/[,、\s]+/).map((t) => t.trim()).filter(Boolean);
+      const merged = Array.from(new Set([...existing, ...suggestedTags]));
+      setTagsInput(merged.join(", "));
+    }
+    if (suggestedCategory) {
+      setCategory(suggestedCategory);
+    }
+    setProofreadText(null);
+    setSuggestedTags([]);
+    setSuggestedCategory(null);
+    setShowComparison(false);
   };
 
   // 比較表示を閉じる
   const closeComparison = () => {
     setShowComparison(false);
     setProofreadText(null);
+    setSuggestedTags([]);
+    setSuggestedCategory(null);
   };
 
   return (
@@ -689,7 +708,7 @@ function NewPostForm({
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-xs font-medium text-gray-500">元の文章</span>
                       </div>
-                      <div className="h-48 p-3 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap group-hover:border-gray-300 transition-colors">
+                      <div className="h-40 p-3 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap group-hover:border-gray-300 transition-colors">
                         {body}
                       </div>
                       <p className="text-[10px] text-gray-400 mt-1 text-center group-hover:text-gray-500">クリックで元のまま編集を続ける</p>
@@ -697,19 +716,47 @@ function NewPostForm({
 
                     {/* 校正後の文章 */}
                     <div
-                      onClick={applyProofreadText}
+                      onClick={applyProofreadResult}
                       className="cursor-pointer group"
                     >
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-xs font-medium text-purple-600">校正後</span>
                         <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                       </div>
-                      <div className="h-48 p-3 border-2 border-purple-300 rounded-lg bg-purple-50 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100 transition-colors">
+                      <div className="h-40 p-3 border-2 border-purple-300 rounded-lg bg-purple-50 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100 transition-colors">
                         {proofreadText}
                       </div>
                       <p className="text-[10px] text-purple-500 mt-1 text-center group-hover:text-purple-600">クリックで適用</p>
                     </div>
                   </div>
+
+                  {/* 自動付与されるタグ・カテゴリ */}
+                  {(suggestedTags.length > 0 || suggestedCategory) && (
+                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                      <p className="text-xs font-medium text-purple-700 mb-2">AIが提案する設定（適用時に反映）</p>
+                      {suggestedCategory && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[11px] text-purple-600">カテゴリ:</span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${CATEGORY_CONFIG[suggestedCategory].bgColor} ${CATEGORY_CONFIG[suggestedCategory].color}`}>
+                            {CATEGORY_CONFIG[suggestedCategory].icon} {CATEGORY_CONFIG[suggestedCategory].label}
+                          </span>
+                          {suggestedCategory !== category && (
+                            <span className="text-[10px] text-purple-400">← {CATEGORY_CONFIG[category].label} から変更</span>
+                          )}
+                        </div>
+                      )}
+                      {suggestedTags.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] text-purple-600">タグ:</span>
+                          {suggestedTags.map((tag) => (
+                            <span key={tag} className="px-2 py-0.5 bg-white text-purple-700 rounded text-xs border border-purple-200">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <textarea
@@ -949,6 +996,11 @@ export default function KnowledgePage() {
       });
       if (res.ok) {
         const newPost = await res.json();
+        // サンプルデータが未来のタイムスタンプを持つ場合、新規投稿が最新になるよう調整
+        const latest = posts.reduce((max, p) => (p.created_at > max ? p.created_at : max), "");
+        if (newPost.created_at <= latest) {
+          newPost.created_at = new Date(new Date(latest).getTime() + 1000).toISOString();
+        }
         setPosts((prev) => [newPost, ...prev]);
       }
     } catch (e) {
