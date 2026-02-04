@@ -940,14 +940,19 @@ export default function KnowledgePage() {
 
   const handleNewPost = async (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[] }) => {
     if (!currentUser) return;
-    const res = await fetch("/api/knowledge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, author: currentUser }),
-    });
-    if (res.ok) {
-      const newPost = await res.json();
-      setPosts((prev) => [newPost, ...prev]);
+    try {
+      const teamId = USER_TEAM_MAP[currentUser] || undefined;
+      const res = await fetch("/api/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, author: currentUser, team_id: teamId }),
+      });
+      if (res.ok) {
+        const newPost = await res.json();
+        setPosts((prev) => [newPost, ...prev]);
+      }
+    } catch (e) {
+      console.error("Failed to create post:", e);
     }
   };
 
