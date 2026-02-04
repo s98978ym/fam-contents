@@ -21,7 +21,10 @@
 src/
 ├── app/                     # Next.js App Router (ページ + APIルート)
 │   ├── api/                 # RESTful APIルート
-│   │   ├── contents/        #   コンテンツ CRUD + AI生成
+│   │   ├── contents/        #   コンテンツ CRUD + AI分析 + AI生成
+│   │   │   ├── analyze/     #     素材ファイルAI分析 (Gemini)
+│   │   │   ├── generate/    #     スタンドアロンAI生成 (Gemini)
+│   │   │   └── [id]/generate/ #   コンテンツID指定AI生成 (Gemini)
 │   │   ├── campaigns/       #   キャンペーン CRUD
 │   │   ├── variants/        #   チャネルバリアント一覧
 │   │   ├── reviews/         #   レビュー CRUD
@@ -29,6 +32,7 @@ src/
 │   │   ├── metrics/         #   メトリクス取得
 │   │   ├── knowledge/       #   ナレッジ共有 CRUD + AIナレッジ発展 + カテゴリ分類
 │   │   ├── drive/           #   Google Drive連携 (フォルダ・ファイル)
+│   │   ├── health/          #   Gemini接続診断
 │   │   ├── audit-logs/      #   監査ログ取得
 │   │   └── prompt-versions/ #   プロンプトバージョン管理
 │   ├── campaigns/           # キャンペーン管理ページ
