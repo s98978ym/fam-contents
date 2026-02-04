@@ -986,7 +986,7 @@ export default function KnowledgePage() {
       </div>
 
       {/* Scope Tabs */}
-      <div className="flex items-center gap-1 mb-6 border-b border-gray-200">
+      <div className="flex items-center gap-1 mb-4 border-b border-gray-200">
         <button
           onClick={() => setViewScope("all")}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
@@ -996,9 +996,7 @@ export default function KnowledgePage() {
           }`}
         >
           <span className="inline-flex items-center gap-1.5">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <span>🌐</span>
             全体
           </span>
         </button>
@@ -1012,13 +1010,8 @@ export default function KnowledgePage() {
           }`}
         >
           <span className="inline-flex items-center gap-1.5">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
+            <span>👥</span>
             チーム
-            {currentUserTeam && (
-              <span className="text-xs text-gray-400">({TEAM_NAMES[currentUserTeam]})</span>
-            )}
           </span>
         </button>
         <button
@@ -1031,13 +1024,32 @@ export default function KnowledgePage() {
           }`}
         >
           <span className="inline-flex items-center gap-1.5">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
+            <span>👤</span>
             自分の投稿
           </span>
         </button>
       </div>
+
+      {/* Scope Banner */}
+      {viewScope === "team" && currentUserTeam && (
+        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+          <span className="text-lg leading-none">👥</span>
+          <span className="text-sm font-medium text-green-700">
+            {TEAM_NAMES[currentUserTeam]}チームの投稿を表示中
+          </span>
+          <span className="text-xs text-green-600">
+            （あなたは{TEAM_NAMES[currentUserTeam]}チーム所属）
+          </span>
+        </div>
+      )}
+      {viewScope === "personal" && currentUser && (
+        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-purple-50 border border-purple-200 rounded-lg">
+          <span className="text-lg leading-none">👤</span>
+          <span className="text-sm font-medium text-purple-700">
+            {currentUser}さんの投稿を表示中
+          </span>
+        </div>
+      )}
 
       {/* Search & Time Period */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
