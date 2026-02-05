@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
 // Google Drive API クライアント（fetch ベース — サービスアカウント認証）
 // ---------------------------------------------------------------------------
+// 注意: このモジュールはサーバーサイド専用。クライアントサイドからインポートしないこと。
 
 import * as crypto from "crypto";
 
@@ -14,11 +15,20 @@ const privateKey = (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n");
 /** Google Drive API が利用可能かどうか */
 export const isDriveAvailable = serviceAccountEmail.length > 0 && privateKey.length > 0;
 
-// 起動時のログ出力
-if (isDriveAvailable) {
-  console.log("[google_drive] Google Drive API: 有効（サービスアカウント設定済み）");
-} else {
-  console.log("[google_drive] Google Drive API: 無効（環境変数未設定 → シミュレーションモード）");
+// ---------------------------------------------------------------------------
+// ログ出力（初回API呼び出し時に1回だけ出力）
+// ---------------------------------------------------------------------------
+
+let loggedOnce = false;
+
+function logConnectionStatus(): void {
+  if (loggedOnce) return;
+  loggedOnce = true;
+  if (isDriveAvailable) {
+    console.log("[google_drive] Google Drive API: 有効（サービスアカウント設定済み）");
+  } else {
+    console.log("[google_drive] Google Drive API: 無効（環境変数未設定 → シミュレーションモード）");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +208,8 @@ export function categorizeFile(file: DriveFile): FileCategory {
  * Google Drive フォルダ内のファイル一覧を取得
  */
 export async function listFilesInFolder(folderId: string): Promise<DriveFile[]> {
+  logConnectionStatus();
+
   if (!isDriveAvailable) {
     throw new Error("Google Drive API credentials not configured");
   }
@@ -227,6 +239,8 @@ export async function listFilesInFolder(folderId: string): Promise<DriveFile[]> 
  * Google Drive フォルダのメタデータを取得
  */
 export async function getFolderMetadata(folderId: string): Promise<DriveFile> {
+  logConnectionStatus();
+
   if (!isDriveAvailable) {
     throw new Error("Google Drive API credentials not configured");
   }
@@ -241,6 +255,8 @@ export async function getFolderMetadata(folderId: string): Promise<DriveFile> {
  * Google Docs/Sheets/Slides はエクスポートしてプレーンテキストで取得
  */
 export async function getFileContent(fileId: string, mimeType: string): Promise<DriveFileContent> {
+  logConnectionStatus();
+
   if (!isDriveAvailable) {
     throw new Error("Google Drive API credentials not configured");
   }
