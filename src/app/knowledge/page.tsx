@@ -269,6 +269,8 @@ function PostCard({
   onLike,
   onComment,
   onTagClick,
+  onArchive,
+  onDelete,
   compact = false,
 }: {
   post: KnowledgePost;
@@ -277,15 +279,27 @@ function PostCard({
   onLike: (postId: string) => void;
   onComment: (postId: string, body: string) => void;
   onTagClick: (tag: string) => void;
+  onArchive?: (postId: string, archived: boolean) => void;
+  onDelete?: (postId: string) => void;
   compact?: boolean;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isLiked = currentUser ? post.likes.includes(currentUser) : false;
   const postComments = comments.filter((c) => c.post_id === post.id);
   const config = CATEGORY_CONFIG[post.category];
+
+  // 権限チェック
+  const isAuthor = currentUser === post.author;
+  const currentUserTeam = currentUser ? USER_TEAM_MAP[currentUser] : null;
+  const postTeam = post.team_id || USER_TEAM_MAP[post.author];
+  const isSameTeam = currentUserTeam && postTeam && currentUserTeam === postTeam;
+  const canArchive = isAuthor || isSameTeam; // 投稿主 or 同じチーム
+  const canDelete = isAuthor; // 投稿主のみ
 
   const handleSubmitComment = async () => {
     if (!newComment.trim() || submitting) return;
@@ -316,7 +330,19 @@ function PostCard({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+    <div className={`bg-white rounded-xl border p-5 hover:shadow-md transition-shadow ${
+      post.archived ? "border-amber-200 bg-amber-50/30" : "border-gray-200"
+    }`}>
+      {/* Archived badge */}
+      {post.archived && (
+        <div className="mb-3 flex items-center gap-2 text-xs text-amber-700 bg-amber-100 px-3 py-1.5 rounded-lg">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          </svg>
+          アーカイブ済み{post.archived_by && ` (by ${post.archived_by})`}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start gap-3">
         <Avatar name={post.author} size="lg" />
@@ -338,7 +364,82 @@ function PostCard({
             {config.label}
           </button>
         </div>
+
+        {/* Menu button */}
+        {(canArchive || canDelete) && (
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+
+            {/* Dropdown menu */}
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-8 z-20 w-40 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+                  {canArchive && onArchive && (
+                    <button
+                      onClick={() => {
+                        onArchive(post.id, !post.archived);
+                        setShowMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      {post.archived ? "アーカイブ解除" : "アーカイブ"}
+                    </button>
+                  )}
+                  {canDelete && onDelete && (
+                    <button
+                      onClick={() => {
+                        setConfirmDelete(true);
+                        setShowMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      削除
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-700 mb-2">この投稿を削除しますか？この操作は取り消せません。</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                onDelete?.(post.id);
+                setConfirmDelete(false);
+              }}
+              className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-md hover:bg-red-700 transition-colors"
+            >
+              削除する
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-md hover:bg-gray-200 transition-colors"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="mt-4">
@@ -1904,6 +2005,33 @@ export default function KnowledgePage() {
     }
   };
 
+  const handleArchive = async (postId: string, archived: boolean) => {
+    if (!currentUser) return;
+    const res = await fetch(`/api/knowledge/${postId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        archived,
+        archived_by: archived ? currentUser : undefined,
+        archived_at: archived ? new Date().toISOString() : undefined,
+      }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setPosts((prev) => prev.map((p) => (p.id === postId ? updated : p)));
+    }
+  };
+
+  const handleDelete = async (postId: string) => {
+    if (!currentUser) return;
+    const res = await fetch(`/api/knowledge/${postId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    }
+  };
+
   const handleNewPost = async (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[] }) => {
     if (!currentUser) return;
     try {
@@ -2203,6 +2331,8 @@ export default function KnowledgePage() {
                   onLike={handleLike}
                   onComment={handleComment}
                   onTagClick={handleTagClick}
+                  onArchive={handleArchive}
+                  onDelete={handleDelete}
                 />
               ))
             )}
@@ -2252,6 +2382,8 @@ export default function KnowledgePage() {
                     onLike={handleLike}
                     onComment={handleComment}
                     onTagClick={handleTagClick}
+                    onArchive={handleArchive}
+                    onDelete={handleDelete}
                     compact
                   />
                 ))
