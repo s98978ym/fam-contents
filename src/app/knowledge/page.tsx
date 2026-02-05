@@ -586,12 +586,15 @@ interface KnowledgeCandidate {
   source_file: string;
 }
 
+type InputTab = "drive" | "upload";
+
 function MinutesKnowledgePanel({
   onCopyToEditor,
 }: {
   onCopyToEditor: (data: { body: string; tags: string[]; category: KnowledgeCategory; sourceInfo: string }) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<InputTab>("drive");
 
   // Drive state
   const [driveConfig, setDriveConfig] = useState<DriveConfig | null>(null);
@@ -600,7 +603,12 @@ function MinutesKnowledgePanel({
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [driveError, setDriveError] = useState<string | null>(null);
-  const [emailCopied, setEmailCopied] = useState(false);
+  const [fetchCompleted, setFetchCompleted] = useState(false);
+  const [driveSource, setDriveSource] = useState<"google_drive" | "simulation" | "error" | null>(null);
+
+  // Upload state
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // Extraction state
   const [extracting, setExtracting] = useState(false);
@@ -622,11 +630,24 @@ function MinutesKnowledgePanel({
     }
   }, [isOpen, driveConfig]);
 
+  // Reset state when switching tabs
+  const handleTabChange = (tab: InputTab) => {
+    setActiveTab(tab);
+    setFiles([]);
+    setUploadedFiles([]);
+    setFetchCompleted(false);
+    setDriveError(null);
+    setCandidates([]);
+    setSelectedCandidateId(null);
+  };
+
   // Fetch files from folder URL
   const handleFetchFiles = async () => {
     if (!folderUrl.trim()) return;
     setLoadingFiles(true);
     setDriveError(null);
+    setFetchCompleted(false);
+    setDriveSource(null);
     setCandidates([]);
     setSelectedCandidateId(null);
     setExtractSource(null);
@@ -638,30 +659,67 @@ function MinutesKnowledgePanel({
       if (data.error) {
         setDriveError(data.error);
         setFiles([]);
+        setDriveSource("error");
       } else {
         setFiles(data.files || []);
         setFolderName(folderUrl.split("/").pop() || "フォルダ");
+        setDriveSource(data.source || "simulation");
       }
     } catch {
       setDriveError("ファイル一覧の取得に失敗しました");
       setFiles([]);
+      setDriveSource("error");
     } finally {
       setLoadingFiles(false);
+      setFetchCompleted(true);
     }
   };
 
-  const handleCopyEmail = () => {
-    if (driveConfig?.serviceAccountEmail) {
-      navigator.clipboard.writeText(driveConfig.serviceAccountEmail);
-      setEmailCopied(true);
-      setTimeout(() => setEmailCopied(false), 2000);
+  // File upload handlers
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const droppedFiles = Array.from(e.dataTransfer.files).filter(
+      (f) => f.type.includes("text") || f.name.endsWith(".txt") || f.name.endsWith(".md") ||
+             f.type.includes("document") || f.name.endsWith(".docx") || f.name.endsWith(".doc")
+    );
+    if (droppedFiles.length > 0) {
+      setUploadedFiles((prev) => [...prev, ...droppedFiles]);
     }
   };
 
-  const minutesFiles = files.filter((f) => f.category === "minutes" || f.category === "transcript");
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setUploadedFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+    }
+  };
+
+  const removeUploadedFile = (index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Get files for extraction (from either source)
+  const getFilesForExtraction = (): DriveFile[] => {
+    if (activeTab === "drive") {
+      return files;
+    } else {
+      return uploadedFiles.map((f, i) => ({
+        id: `upload-${i}`,
+        name: f.name,
+        mimeType: f.type || "text/plain",
+        category: f.name.includes("議事録") || f.name.includes("mtg") ? "minutes" as const : "other" as const,
+      }));
+    }
+  };
+
+  const currentFiles = getFilesForExtraction();
+  const minutesFiles = currentFiles.filter((f) => f.category === "minutes" || f.category === "transcript");
+  const hasFiles = activeTab === "drive" ? files.length > 0 : uploadedFiles.length > 0;
 
   const handleExtract = async () => {
-    if (minutesFiles.length === 0) return;
+    const filesToExtract = getFilesForExtraction();
+    if (filesToExtract.length === 0) return;
+
     setExtracting(true);
     setCandidates([]);
     setSelectedCandidateId(null);
@@ -669,12 +727,24 @@ function MinutesKnowledgePanel({
     setExtractFallbackReason(null);
 
     try {
+      // For uploaded files, read content
+      let fileContents: { name: string; content: string }[] = [];
+      if (activeTab === "upload") {
+        fileContents = await Promise.all(
+          uploadedFiles.map(async (f) => ({
+            name: f.name,
+            content: await f.text(),
+          }))
+        );
+      }
+
       const res = await fetch("/api/knowledge/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          files: files.map((f) => ({ name: f.name, category: f.category })),
-          folderName: folderName || "",
+          files: filesToExtract.map((f) => ({ name: f.name, category: f.category })),
+          folderName: folderName || "アップロード",
+          fileContents: fileContents.length > 0 ? fileContents : undefined,
         }),
       });
       const data = await res.json();
@@ -737,141 +807,203 @@ function MinutesKnowledgePanel({
       >
         <div className="overflow-hidden">
           <div className="pt-3 space-y-3">
-            {/* Step 1: Share folder with service account */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">1</div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium text-gray-800 mb-1">フォルダをサービスアカウントに共有</h4>
-                  {driveConfig?.configured && driveConfig.serviceAccountEmail ? (
-                    <div className="flex items-center gap-2 bg-gray-50 rounded-md px-3 py-2">
-                      <code className="text-xs text-gray-600 flex-1 truncate">{driveConfig.serviceAccountEmail}</code>
-                      <button
-                        onClick={handleCopyEmail}
-                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium whitespace-nowrap"
-                      >
-                        {emailCopied ? "コピー済み" : "コピー"}
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-amber-600">サービスアカウントが未設定（シミュレーションモードで動作）</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">Google Driveでフォルダを開き「共有」からこのメールアドレスを追加</p>
-                </div>
-              </div>
+            {/* Tab selector */}
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+              <button
+                onClick={() => handleTabChange("drive")}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  activeTab === "drive"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-gray-600 hover:text-gray-800"
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M7.71 3.5L1.15 15l3.43 6h13.71l3.56-6L15.29 3.5H7.71zm.79 1.5h7l4.79 8h-2.79l-4.79-8h-2.21l-4.79 8H3.42l4.08-8z"/>
+                </svg>
+                Google Drive
+              </button>
+              <button
+                onClick={() => handleTabChange("upload")}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  activeTab === "upload"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-gray-600 hover:text-gray-800"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                ファイルアップロード
+              </button>
             </div>
 
-            {/* Step 2: Enter folder URL */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">2</div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium text-gray-800 mb-1">フォルダURLを入力</h4>
-                  <input
-                    type="text"
-                    value={folderUrl}
-                    onChange={(e) => setFolderUrl(e.target.value)}
-                    placeholder="https://drive.google.com/drive/folders/..."
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
-                    onKeyDown={(e) => { if (e.key === "Enter") handleFetchFiles(); }}
-                  />
-                </div>
-              </div>
-            </div>
+            {/* Google Drive tab content */}
+            {activeTab === "drive" && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                {/* Drive not configured warning */}
+                {driveConfig && !driveConfig.configured && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800 font-medium">Google Drive連携が未設定です</p>
+                    <p className="text-xs text-amber-600 mt-1">管理者がVercelで環境変数を設定するとGoogle Driveからファイルを取得できます。今はファイルアップロードをお試しください。</p>
+                  </div>
+                )}
 
-            {/* Step 3: Fetch files */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">3</div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium text-gray-800 mb-2">ファイル一覧を取得</h4>
-                  <button
-                    onClick={handleFetchFiles}
-                    disabled={!folderUrl.trim() || loadingFiles}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      !folderUrl.trim() || loadingFiles
-                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "bg-indigo-600 text-white hover:bg-indigo-700"
-                    }`}
-                  >
-                    {loadingFiles ? "取得中..." : "ファイルを取得"}
-                  </button>
+                {/* URL input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Google DriveフォルダのURL</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={folderUrl}
+                      onChange={(e) => setFolderUrl(e.target.value)}
+                      placeholder="https://drive.google.com/drive/folders/..."
+                      className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
+                      onKeyDown={(e) => { if (e.key === "Enter") handleFetchFiles(); }}
+                    />
+                    <button
+                      onClick={handleFetchFiles}
+                      disabled={!folderUrl.trim() || loadingFiles}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                        !folderUrl.trim() || loadingFiles
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      }`}
+                    >
+                      {loadingFiles ? "取得中..." : "取得"}
+                    </button>
+                  </div>
                   {driveError && (
                     <p className="text-xs text-red-600 mt-2">{driveError}</p>
                   )}
                 </div>
-              </div>
-            </div>
 
-            {/* File list */}
-            {files.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  議事録ファイル
-                </h4>
-                {loadingFiles ? (
-                  <div className="text-sm text-gray-400 py-2">ファイルを読み込み中...</div>
-                ) : files.length === 0 ? (
-                  <div className="text-sm text-gray-400 py-2">ファイルが見つかりません</div>
-                ) : (
-                  <>
-                    <div className="space-y-1 mb-3">
-                      {files.map((file) => {
-                        const isMinutes = file.category === "minutes" || file.category === "transcript";
-                        return (
-                          <div
-                            key={file.id}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
-                              isMinutes ? "bg-blue-50 text-blue-800" : "bg-gray-50 text-gray-500"
-                            }`}
-                          >
-                            <span className="text-xs">
-                              {file.category === "minutes" ? "📝" : file.category === "transcript" ? "📋" : file.category === "photo" ? "🖼️" : "📄"}
-                            </span>
-                            <span className="flex-1 truncate">{file.name}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                              isMinutes ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"
-                            }`}>
-                              {file.category === "minutes" ? "議事録" : file.category === "transcript" ? "文字起こし" : file.category === "photo" ? "写真" : "その他"}
-                            </span>
-                          </div>
-                        );
-                      })}
+                {/* Service account info (collapsible) */}
+                {driveConfig?.configured && driveConfig.serviceAccountEmail && (
+                  <details className="text-xs text-gray-500">
+                    <summary className="cursor-pointer hover:text-gray-700">フォルダを共有する必要がありますか？</summary>
+                    <div className="mt-2 p-2 bg-gray-50 rounded-md">
+                      <p>以下のメールアドレスにフォルダを共有してください:</p>
+                      <code className="block mt-1 p-2 bg-white border rounded text-xs break-all">{driveConfig.serviceAccountEmail}</code>
                     </div>
+                  </details>
+                )}
 
-                    {minutesFiles.length > 0 && candidates.length === 0 && (
-                      <button
-                        onClick={handleExtract}
-                        disabled={extracting}
-                        className="w-full py-2.5 bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-medium rounded-lg hover:from-indigo-600 hover:to-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                      >
-                        {extracting ? (
-                          <>
-                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                            </svg>
-                            ナレッジを抽出中...
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            AIで発展（{minutesFiles.length}件の議事録から抽出）
-                          </>
-                        )}
-                      </button>
-                    )}
+                {/* Fetch result - files from Drive */}
+                {fetchCompleted && !driveError && driveSource === "google_drive" && files.length > 0 && (
+                  <div className="border-t pt-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold text-gray-500 uppercase">取得したファイル</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">Google Drive</span>
+                    </div>
+                    <div className="space-y-1">
+                      {files.map((file) => (
+                        <div key={file.id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-md text-sm">
+                          <span className="flex-1 truncate">{file.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600">
+                            {file.category === "minutes" ? "議事録" : file.category === "transcript" ? "文字起こし" : "その他"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                    {minutesFiles.length === 0 && (
-                      <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                        議事録・文字起こしファイルが見つかりません。議事録カテゴリのファイルがあるフォルダを選択してください。
-                      </div>
-                    )}
-                  </>
+                {/* Simulation mode result */}
+                {fetchCompleted && !driveError && driveSource === "simulation" && (
+                  <div className="border-t pt-4">
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
+                      Google Drive連携が未設定のため、ファイルを取得できませんでした。<br />
+                      <span className="text-indigo-600 font-medium">「ファイルアップロード」タブ</span>から直接ファイルをアップロードしてください。
+                    </div>
+                  </div>
                 )}
               </div>
+            )}
+
+            {/* Upload tab content */}
+            {activeTab === "upload" && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                {/* Drop zone */}
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={handleFileDrop}
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isDragOver ? "border-indigo-400 bg-indigo-50" : "border-gray-300 hover:border-gray-400"
+                  }`}
+                >
+                  <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <p className="text-sm text-gray-600 mb-2">ファイルをドラッグ&ドロップ</p>
+                  <p className="text-xs text-gray-400 mb-3">または</p>
+                  <label className="inline-block px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md cursor-pointer hover:bg-indigo-700 transition-colors">
+                    ファイルを選択
+                    <input
+                      type="file"
+                      multiple
+                      accept=".txt,.md,.doc,.docx"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </label>
+                  <p className="text-xs text-gray-400 mt-2">.txt, .md, .doc, .docx に対応</p>
+                </div>
+
+                {/* Uploaded files list */}
+                {uploadedFiles.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                      アップロードしたファイル ({uploadedFiles.length}件)
+                    </div>
+                    <div className="space-y-1">
+                      {uploadedFiles.map((file, i) => (
+                        <div key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-md text-sm">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="flex-1 truncate">{file.name}</span>
+                          <span className="text-xs text-gray-400">{(file.size / 1024).toFixed(1)}KB</span>
+                          <button
+                            onClick={() => removeUploadedFile(i)}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Extract button (shown when files are ready) */}
+            {hasFiles && candidates.length === 0 && (
+              <button
+                onClick={handleExtract}
+                disabled={extracting}
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-medium rounded-lg hover:from-indigo-600 hover:to-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              >
+                {extracting ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    ナレッジを抽出中...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    AIでナレッジを抽出（{currentFiles.length}件のファイルから）
+                  </>
+                )}
+              </button>
             )}
 
             {/* Step 3: Extraction results */}
