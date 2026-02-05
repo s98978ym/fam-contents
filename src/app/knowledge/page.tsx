@@ -27,6 +27,113 @@ const AVATAR_COLORS: Record<string, string> = {
   高橋: "bg-pink-500",
 };
 
+// ---------------------------------------------------------------------------
+// Diff highlighting helper
+// ---------------------------------------------------------------------------
+
+/** Split text into meaningful segments (sentences / line breaks) */
+function splitSegments(text: string): string[] {
+  // Split by line breaks first, then by sentence-ending punctuation
+  const parts: string[] = [];
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") {
+      parts.push("\n");
+      continue;
+    }
+    // Split by Japanese/English sentence endings, keeping the delimiter
+    const sentences = line.split(/((?:[。．！？!?])+)/);
+    for (let i = 0; i < sentences.length; i += 2) {
+      const seg = sentences[i] + (sentences[i + 1] || "");
+      if (seg) parts.push(seg);
+    }
+    parts.push("\n");
+  }
+  // Remove trailing newline
+  if (parts.length > 0 && parts[parts.length - 1] === "\n") parts.pop();
+  return parts;
+}
+
+/** Compute LCS table for two arrays */
+function lcsTable(a: string[], b: string[]): number[][] {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1].trim() === b[j - 1].trim()) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  return dp;
+}
+
+/** Produce diff segments: each has text, type (kept/added) */
+interface DiffSegment {
+  text: string;
+  type: "kept" | "added";
+}
+
+function computeDiff(original: string, modified: string): DiffSegment[] {
+  const a = splitSegments(original);
+  const b = splitSegments(modified);
+  const dp = lcsTable(a, b);
+
+  // Backtrack to find which segments in `b` are new vs kept
+  const result: DiffSegment[] = [];
+  let i = a.length, j = b.length;
+  const segments: { text: string; type: "kept" | "added" }[] = [];
+
+  while (i > 0 && j > 0) {
+    if (a[i - 1].trim() === b[j - 1].trim()) {
+      segments.push({ text: b[j - 1], type: "kept" });
+      i--;
+      j--;
+    } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+      i--; // skip original-only segment
+    } else {
+      segments.push({ text: b[j - 1], type: "added" });
+      j--;
+    }
+  }
+  while (j > 0) {
+    segments.push({ text: b[j - 1], type: "added" });
+    j--;
+  }
+
+  segments.reverse();
+
+  // Merge consecutive segments of the same type
+  for (const seg of segments) {
+    if (result.length > 0 && result[result.length - 1].type === seg.type) {
+      result[result.length - 1].text += seg.text;
+    } else {
+      result.push({ ...seg });
+    }
+  }
+
+  return result;
+}
+
+/** Render diff-highlighted text as React elements */
+function DiffHighlight({ original, modified }: { original: string; modified: string }) {
+  const segments = useMemo(() => computeDiff(original, modified), [original, modified]);
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.text === "\n" ? (
+          <br key={i} />
+        ) : seg.type === "added" ? (
+          <span key={i} className="bg-green-100 text-green-800 rounded-sm px-0.5">{seg.text}</span>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        )
+      )}
+    </>
+  );
+}
+
 type TimePeriod = "all" | "today" | "week" | "month";
 type ViewScope = "all" | "team" | "personal";
 
@@ -577,8 +684,8 @@ function QuickPostBox({
                         {proofreadSource === "gemini" && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Gemini</span>}
                         <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                       </div>
-                      <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
-                        {proofreadText}
+                      <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
+                        <DiffHighlight original={body} modified={proofreadText} />
                       </div>
                       <p className="text-[10px] text-purple-500 mt-1 text-right group-hover:text-purple-600">クリックですべて適用</p>
                     </div>
@@ -1049,8 +1156,8 @@ function NewPostForm({
                           {proofreadSource === "gemini" && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Gemini</span>}
                           <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                         </div>
-                        <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
-                          {proofreadText}
+                        <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
+                          <DiffHighlight original={body} modified={proofreadText} />
                         </div>
                         <p className="text-[10px] text-purple-500 mt-1 text-right group-hover:text-purple-600">クリックですべて適用</p>
                       </div>
