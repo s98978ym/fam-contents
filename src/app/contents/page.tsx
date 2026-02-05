@@ -20,7 +20,7 @@ export default function ContentsPage() {
   useEffect(() => {
     fetch("/api/drive/folders")
       .then((r) => r.json())
-      .then((data) => { setFolders(data); setLoading(false); });
+      .then((data) => { setFolders(data.folders || []); setLoading(false); });
   }, []);
 
   async function handleCreate() {
