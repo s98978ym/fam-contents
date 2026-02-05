@@ -27,6 +27,113 @@ const AVATAR_COLORS: Record<string, string> = {
   高橋: "bg-pink-500",
 };
 
+// ---------------------------------------------------------------------------
+// Diff highlighting helper
+// ---------------------------------------------------------------------------
+
+/** Split text into meaningful segments (sentences / line breaks) */
+function splitSegments(text: string): string[] {
+  // Split by line breaks first, then by sentence-ending punctuation
+  const parts: string[] = [];
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") {
+      parts.push("\n");
+      continue;
+    }
+    // Split by Japanese/English sentence endings, keeping the delimiter
+    const sentences = line.split(/((?:[。．！？!?])+)/);
+    for (let i = 0; i < sentences.length; i += 2) {
+      const seg = sentences[i] + (sentences[i + 1] || "");
+      if (seg) parts.push(seg);
+    }
+    parts.push("\n");
+  }
+  // Remove trailing newline
+  if (parts.length > 0 && parts[parts.length - 1] === "\n") parts.pop();
+  return parts;
+}
+
+/** Compute LCS table for two arrays */
+function lcsTable(a: string[], b: string[]): number[][] {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1].trim() === b[j - 1].trim()) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  return dp;
+}
+
+/** Produce diff segments: each has text, type (kept/added) */
+interface DiffSegment {
+  text: string;
+  type: "kept" | "added";
+}
+
+function computeDiff(original: string, modified: string): DiffSegment[] {
+  const a = splitSegments(original);
+  const b = splitSegments(modified);
+  const dp = lcsTable(a, b);
+
+  // Backtrack to find which segments in `b` are new vs kept
+  const result: DiffSegment[] = [];
+  let i = a.length, j = b.length;
+  const segments: { text: string; type: "kept" | "added" }[] = [];
+
+  while (i > 0 && j > 0) {
+    if (a[i - 1].trim() === b[j - 1].trim()) {
+      segments.push({ text: b[j - 1], type: "kept" });
+      i--;
+      j--;
+    } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+      i--; // skip original-only segment
+    } else {
+      segments.push({ text: b[j - 1], type: "added" });
+      j--;
+    }
+  }
+  while (j > 0) {
+    segments.push({ text: b[j - 1], type: "added" });
+    j--;
+  }
+
+  segments.reverse();
+
+  // Merge consecutive segments of the same type
+  for (const seg of segments) {
+    if (result.length > 0 && result[result.length - 1].type === seg.type) {
+      result[result.length - 1].text += seg.text;
+    } else {
+      result.push({ ...seg });
+    }
+  }
+
+  return result;
+}
+
+/** Render diff-highlighted text as React elements */
+function DiffHighlight({ original, modified }: { original: string; modified: string }) {
+  const segments = useMemo(() => computeDiff(original, modified), [original, modified]);
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.text === "\n" ? (
+          <br key={i} />
+        ) : seg.type === "added" ? (
+          <span key={i} className="bg-green-100 text-green-800 rounded-sm px-0.5">{seg.text}</span>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        )
+      )}
+    </>
+  );
+}
+
 type TimePeriod = "all" | "today" | "week" | "month";
 type ViewScope = "all" | "team" | "personal";
 
@@ -373,6 +480,7 @@ function QuickPostBox({
   const [showComparison, setShowComparison] = useState(false);
   const [proofreadSource, setProofreadSource] = useState<"gemini" | "simulation" | null>(null);
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
+  const [aiLength, setAiLength] = useState<"short" | "normal" | "long">("short");
 
   const placeholders = [
     "今日学んだことや気づきをシェアしよう",
@@ -474,7 +582,7 @@ function QuickPostBox({
       const res = await fetch("/api/knowledge/proofread", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: body, title: autoTitle }),
+        body: JSON.stringify({ text: body, title: autoTitle, length: aiLength }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -576,8 +684,8 @@ function QuickPostBox({
                         {proofreadSource === "gemini" && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Gemini</span>}
                         <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                       </div>
-                      <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
-                        {proofreadText}
+                      <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
+                        <DiffHighlight original={body} modified={proofreadText} />
                       </div>
                       <p className="text-[10px] text-purple-500 mt-1 text-right group-hover:text-purple-600">クリックですべて適用</p>
                     </div>
@@ -728,29 +836,47 @@ function QuickPostBox({
                     キャンセル
                   </button>
                   {!showComparison && (
-                    <button
-                      type="button"
-                      onClick={handleProofread}
-                      disabled={!body.trim() || isProofreading}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-white/70 hover:bg-purple-50 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-purple-200 hover:border-purple-300 hover:shadow-sm"
-                    >
-                      {isProofreading ? (
-                        <>
-                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          発展中...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                          </svg>
-                          AIで発展
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center bg-white/60 rounded-lg border border-gray-200 p-0.5">
+                        {([["short", "ショート(1.5倍)"], ["normal", "ノーマル(2倍)"], ["long", "ロング(3-5倍)"]] as const).map(([val, label]) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setAiLength(val)}
+                            className={`px-2 py-1 text-[10px] rounded-md transition-all ${
+                              aiLength === val
+                                ? "bg-purple-100 text-purple-700 font-medium shadow-sm"
+                                : "text-gray-400 hover:text-gray-600"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleProofread}
+                        disabled={!body.trim() || isProofreading}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-white/70 hover:bg-purple-50 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-purple-200 hover:border-purple-300 hover:shadow-sm"
+                      >
+                        {isProofreading ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            発展中...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                            </svg>
+                            AIで発展
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
                 <button
@@ -838,6 +964,7 @@ function NewPostForm({
   const [showComparison, setShowComparison] = useState(false);
   const [proofreadSource, setProofreadSource] = useState<"gemini" | "simulation" | null>(null);
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
+  const [aiLength, setAiLength] = useState<"short" | "normal" | "long">("short");
 
   const handleSubmit = async () => {
     if (!title.trim() || !body.trim() || submitting) return;
@@ -856,7 +983,7 @@ function NewPostForm({
       const res = await fetch("/api/knowledge/proofread", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: body, title }),
+        body: JSON.stringify({ text: body, title, length: aiLength }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -950,29 +1077,47 @@ function NewPostForm({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm font-medium text-gray-700">内容</label>
-                <button
-                  type="button"
-                  onClick={handleProofread}
-                  disabled={!body.trim() || isProofreading}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isProofreading ? (
-                    <>
-                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      発展中...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
-                      AIで発展
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 p-0.5">
+                    {([["short", "ショート(1.5倍)"], ["normal", "ノーマル(2倍)"], ["long", "ロング(3-5倍)"]] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setAiLength(val)}
+                        className={`px-2 py-1 text-[10px] rounded-md transition-all ${
+                          aiLength === val
+                            ? "bg-purple-100 text-purple-700 font-medium shadow-sm"
+                            : "text-gray-400 hover:text-gray-600"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleProofread}
+                    disabled={!body.trim() || isProofreading}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isProofreading ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        発展中...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        AIで発展
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* 比較表示モード */}
@@ -1011,8 +1156,8 @@ function NewPostForm({
                           {proofreadSource === "gemini" && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Gemini</span>}
                           <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">おすすめ</span>
                         </div>
-                        <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 whitespace-pre-wrap group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
-                          {proofreadText}
+                        <div className="p-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-sm text-gray-700 group-hover:border-purple-400 group-hover:bg-purple-100/80 transition-colors leading-relaxed">
+                          <DiffHighlight original={body} modified={proofreadText} />
                         </div>
                         <p className="text-[10px] text-purple-500 mt-1 text-right group-hover:text-purple-600">クリックですべて適用</p>
                       </div>

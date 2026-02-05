@@ -16,7 +16,15 @@ interface ProofreadResult {
   suggested_category: KnowledgeCategory;
 }
 
-function buildProofreadPrompt(text: string, title: string): string {
+type OutputLength = "short" | "normal" | "long";
+
+const LENGTH_INSTRUCTIONS: Record<OutputLength, string> = {
+  short: "元テキストの約1.5倍の文字数を目安にする。要点を絞り、端的にまとめる。補強は最小限で核心だけ。",
+  normal: "元テキストの約2倍の文字数を目安にする。バランスよく補強を入れる。",
+  long: "元テキストの3〜5倍の文字数を目安にする。背景・事例・実践ステップを丁寧に展開する。",
+};
+
+function buildProofreadPrompt(text: string, title: string, length: OutputLength = "short"): string {
   return `あなたはマルチチャネル・コンテンツ運用チームのシニアナレッジエディターです。
 チームメンバーが投稿した短いメモや気づきを、チーム全体で活用できる実践的なナレッジに発展させます。
 
@@ -48,7 +56,7 @@ Step 2で特定した観点を補強するために、以下のような要素�
 - 元のテキストの表現やトーンを尊重しつつ、読みやすさは改善する
 - 投稿者の気づきに対して「なぜ」「具体的には」「チームでどう活かすか」を補う
 - 補強内容は事実ベースで、推測は「〜と考えられます」と明示する
-- 元テキストの2〜3倍程度の分量を目安にする（短すぎず、長すぎず）
+- 分量の目安: ${LENGTH_INSTRUCTIONS[length]}
 
 ## 絶対に守るフォーマットルール
 
@@ -127,9 +135,10 @@ function stripMarkdown(text: string): string {
 
 async function proofreadWithGemini(
   text: string,
-  title: string
+  title: string,
+  length: OutputLength = "short"
 ): Promise<ProofreadResult> {
-  const prompt = buildProofreadPrompt(text, title);
+  const prompt = buildProofreadPrompt(text, title, length);
   const result = await generateJSON<ProofreadResult>(prompt, {
     temperature: 0.7,
     maxOutputTokens: 4096,
@@ -283,7 +292,7 @@ function suggestCategory(text: string, title: string): KnowledgeCategory {
 
 export async function POST(request: Request) {
   try {
-    const { text, title } = await request.json();
+    const { text, title, length } = await request.json();
 
     if (!text || typeof text !== "string") {
       return NextResponse.json(
@@ -293,14 +302,16 @@ export async function POST(request: Request) {
     }
 
     const titleStr = typeof title === "string" ? title : "";
+    const validLengths: OutputLength[] = ["short", "normal", "long"];
+    const outputLength: OutputLength = validLengths.includes(length) ? length : "short";
 
     // Gemini API が利用可能なら本物のAI発展、なければシミュレーション
     let fallbackReason = "";
 
     if (isGeminiAvailable) {
       try {
-        console.log("[proofread] Gemini API を使用してナレッジ発展を実行...");
-        const result = await proofreadWithGemini(text, titleStr);
+        console.log(`[proofread] Gemini API を使用してナレッジ発展を実行 (length=${outputLength})...`);
+        const result = await proofreadWithGemini(text, titleStr, outputLength);
         const textChanged = text !== result.proofread;
         const hasTags = result.suggested_tags.length > 0;
         const categoryMeaningful = result.suggested_category !== "other";
