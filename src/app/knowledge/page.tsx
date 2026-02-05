@@ -601,6 +601,9 @@ function MinutesKnowledgePanel({
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [driveError, setDriveError] = useState<string | null>(null);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [fetchCompleted, setFetchCompleted] = useState(false);
+  const [driveSource, setDriveSource] = useState<"google_drive" | "simulation" | "error" | null>(null);
+  const [driveFallbackReason, setDriveFallbackReason] = useState<string | null>(null);
 
   // Extraction state
   const [extracting, setExtracting] = useState(false);
@@ -627,6 +630,9 @@ function MinutesKnowledgePanel({
     if (!folderUrl.trim()) return;
     setLoadingFiles(true);
     setDriveError(null);
+    setFetchCompleted(false);
+    setDriveSource(null);
+    setDriveFallbackReason(null);
     setCandidates([]);
     setSelectedCandidateId(null);
     setExtractSource(null);
@@ -638,15 +644,22 @@ function MinutesKnowledgePanel({
       if (data.error) {
         setDriveError(data.error);
         setFiles([]);
+        setDriveSource("error");
+        setDriveFallbackReason(data.details || data.error);
       } else {
         setFiles(data.files || []);
         setFolderName(folderUrl.split("/").pop() || "フォルダ");
+        setDriveSource(data.source || "simulation");
+        if (data.fallback_reason) setDriveFallbackReason(data.fallback_reason);
       }
-    } catch {
+    } catch (err) {
       setDriveError("ファイル一覧の取得に失敗しました");
       setFiles([]);
+      setDriveSource("error");
+      setDriveFallbackReason(err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingFiles(false);
+      setFetchCompleted(true);
     }
   };
 
@@ -803,16 +816,35 @@ function MinutesKnowledgePanel({
               </div>
             </div>
 
-            {/* File list */}
-            {files.length > 0 && (
+            {/* Fetch result feedback */}
+            {fetchCompleted && !driveError && (
               <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  議事録ファイル
-                </h4>
-                {loadingFiles ? (
-                  <div className="text-sm text-gray-400 py-2">ファイルを読み込み中...</div>
-                ) : files.length === 0 ? (
-                  <div className="text-sm text-gray-400 py-2">ファイルが見つかりません</div>
+                {/* Source badge */}
+                <div className="flex items-center gap-2 mb-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    ファイル一覧
+                  </h4>
+                  {driveSource === "google_drive" && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">Google Drive</span>
+                  )}
+                  {driveSource === "simulation" && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">シミュレーション</span>
+                  )}
+                </div>
+
+                {/* Fallback warning */}
+                {driveSource === "simulation" && driveFallbackReason && (
+                  <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-md">
+                    <p className="text-xs text-amber-700">{driveFallbackReason}</p>
+                  </div>
+                )}
+
+                {files.length === 0 ? (
+                  <div className="text-sm text-gray-500 py-2">
+                    {driveSource === "simulation"
+                      ? "シミュレーションモードではファイルが取得できません。サービスアカウントを設定し、フォルダを共有してください。"
+                      : "フォルダ内にファイルが見つかりませんでした。"}
+                  </div>
                 ) : (
                   <>
                     <div className="space-y-1 mb-3">
