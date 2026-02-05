@@ -19,9 +19,9 @@ interface ProofreadResult {
 type OutputLength = "short" | "normal" | "long";
 
 const LENGTH_INSTRUCTIONS: Record<OutputLength, string> = {
-  short: "元テキストと同程度〜1.5倍程度のコンパクトな分量。要点を絞り、端的にまとめる。補強は最小限で核心だけ。",
-  normal: "元テキストの2〜3倍程度の分量を目安にする（短すぎず、長すぎず）。",
-  long: "元テキストの3〜5倍程度の分量。補強を厚めに入れ、背景・事例・実践ステップを丁寧に展開する。",
+  short: "元テキストの約1.5倍の文字数を目安にする。要点を絞り、端的にまとめる。補強は最小限で核心だけ。",
+  normal: "元テキストの約2倍の文字数を目安にする。バランスよく補強を入れる。",
+  long: "元テキストの3〜5倍の文字数を目安にする。背景・事例・実践ステップを丁寧に展開する。",
 };
 
 function buildProofreadPrompt(text: string, title: string, length: OutputLength = "short"): string {

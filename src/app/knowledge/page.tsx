@@ -731,7 +731,7 @@ function QuickPostBox({
                   {!showComparison && (
                     <div className="flex items-center gap-1.5">
                       <div className="flex items-center bg-white/60 rounded-lg border border-gray-200 p-0.5">
-                        {([["short", "ショート"], ["normal", "ノーマル"], ["long", "ロング"]] as const).map(([val, label]) => (
+                        {([["short", "ショート(1.5倍)"], ["normal", "ノーマル(2倍)"], ["long", "ロング(3-5倍)"]] as const).map(([val, label]) => (
                           <button
                             key={val}
                             type="button"
@@ -972,7 +972,7 @@ function NewPostForm({
                 <label className="block text-sm font-medium text-gray-700">内容</label>
                 <div className="flex items-center gap-1.5">
                   <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 p-0.5">
-                    {([["short", "ショート"], ["normal", "ノーマル"], ["long", "ロング"]] as const).map(([val, label]) => (
+                    {([["short", "ショート(1.5倍)"], ["normal", "ノーマル(2倍)"], ["long", "ロング(3-5倍)"]] as const).map(([val, label]) => (
                       <button
                         key={val}
                         type="button"
