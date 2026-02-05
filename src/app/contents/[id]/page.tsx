@@ -254,11 +254,13 @@ export default function FolderDetailPage() {
       fetch("/api/drive/folders").then((r) => r.json()),
       fetch(`/api/drive/files?folderId=${folderId}`).then((r) => r.json()),
       fetch("/api/prompt-versions").then((r) => r.json()),
-    ]).then(([folders, files, prompts]) => {
-      setFolder((folders as DriveFolder[]).find((fd) => fd.id === folderId) ?? null);
-      setDriveFiles(files);
+    ]).then(([foldersData, filesData, prompts]) => {
+      const foldersList = foldersData.folders || [];
+      const filesList = filesData.files || [];
+      setFolder(foldersList.find((fd: DriveFolder) => fd.id === folderId) ?? null);
+      setDriveFiles(filesList);
       setPromptVersions(prompts);
-      setWizardFiles(driveToWizardFiles(files));
+      setWizardFiles(driveToWizardFiles(filesList));
       setLoading(false);
     });
   }, [folderId]);

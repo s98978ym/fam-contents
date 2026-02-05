@@ -620,7 +620,7 @@ function MinutesKnowledgePanel({
       fetch("/api/drive/folders")
         .then((r) => r.json())
         .then((data) => {
-          setFolders(Array.isArray(data) ? data : []);
+          setFolders(data.folders || []);
           setLoadingFolders(false);
         })
         .catch(() => setLoadingFolders(false));
