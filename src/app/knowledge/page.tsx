@@ -489,10 +489,9 @@ interface KnowledgeCandidate {
 }
 
 function MinutesKnowledgePanel({
-  onSubmit,
+  onCopyToEditor,
 }: {
-  currentUser: string;
-  onSubmit: (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[] }) => void;
+  onCopyToEditor: (data: { body: string; tags: string[]; category: KnowledgeCategory; sourceInfo: string }) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -510,9 +509,8 @@ function MinutesKnowledgePanel({
   const [extractFallbackReason, setExtractFallbackReason] = useState<string | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
 
-  // Posting state
-  const [posting, setPosting] = useState(false);
-  const [postedIds, setPostedIds] = useState<Set<string>>(new Set());
+  // Copied state（どの候補を記入枠にコピーしたか）
+  const [copiedIds, setCopiedIds] = useState<Set<string>>(new Set());
 
   // Fetch folders on open
   useEffect(() => {
@@ -581,20 +579,18 @@ function MinutesKnowledgePanel({
     }
   };
 
-  const handlePost = async (candidate: KnowledgeCandidate) => {
-    setPosting(true);
-    try {
-      await onSubmit({
-        title: candidate.title,
-        body: `${candidate.body}\n\n---\n出典: ${candidate.source_file}\n発言者: ${candidate.speakers.join("、") || "参加メンバー"}`,
-        tags: candidate.tags,
-        category: candidate.category,
-        images: [],
-      });
-      setPostedIds((prev) => new Set([...prev, candidate.id]));
-    } finally {
-      setPosting(false);
-    }
+  const handleCopyToEditor = (candidate: KnowledgeCandidate) => {
+    const speakers = candidate.speakers.length > 0 ? candidate.speakers.join("、") : "参加メンバー";
+    const sourceInfo = `出典: ${candidate.source_file}\n発言者: ${speakers}`;
+
+    onCopyToEditor({
+      body: candidate.body,
+      tags: candidate.tags,
+      category: candidate.category,
+      sourceInfo,
+    });
+
+    setCopiedIds((prev) => new Set([...prev, candidate.id]));
   };
 
   const handleReset = () => {
@@ -774,15 +770,15 @@ function MinutesKnowledgePanel({
                 <div className="space-y-2">
                   {candidates.map((candidate) => {
                     const isSelected = selectedCandidateId === candidate.id;
-                    const isPosted = postedIds.has(candidate.id);
+                    const isCopied = copiedIds.has(candidate.id);
                     const config = CATEGORY_CONFIG[candidate.category];
 
                     return (
                       <div
                         key={candidate.id}
                         className={`border rounded-lg transition-all ${
-                          isPosted
-                            ? "border-green-200 bg-green-50/50 opacity-70"
+                          isCopied
+                            ? "border-blue-200 bg-blue-50/50"
                             : isSelected
                             ? "border-indigo-300 bg-indigo-50/30 shadow-sm"
                             : "border-gray-200 hover:border-gray-300 hover:shadow-sm cursor-pointer"
@@ -791,7 +787,6 @@ function MinutesKnowledgePanel({
                         {/* Summary row (always visible) */}
                         <button
                           onClick={() => setSelectedCandidateId(isSelected ? null : candidate.id)}
-                          disabled={isPosted}
                           className="w-full text-left px-4 py-3 flex items-start gap-3"
                         >
                           <div className="flex-1 min-w-0">
@@ -800,9 +795,9 @@ function MinutesKnowledgePanel({
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${config.bgColor} ${config.color}`}>
                                 {config.icon} {config.label}
                               </span>
-                              {isPosted && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
-                                  投稿済み
+                              {isCopied && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">
+                                  コピー済み
                                 </span>
                               )}
                             </div>
@@ -855,31 +850,20 @@ function MinutesKnowledgePanel({
                                 </div>
                               )}
 
-                              {/* Post button */}
-                              {!isPosted && (
-                                <button
-                                  onClick={() => handlePost(candidate)}
-                                  disabled={posting}
-                                  className="mt-3 w-full py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                                >
-                                  {posting ? (
-                                    <>
-                                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                      </svg>
-                                      投稿中...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                      </svg>
-                                      このナレッジを投稿
-                                    </>
-                                  )}
-                                </button>
-                              )}
+                              {/* Copy to editor button */}
+                              <button
+                                onClick={() => handleCopyToEditor(candidate)}
+                                className={`mt-3 w-full py-2 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                                  isCopied
+                                    ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                }`}
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                </svg>
+                                {isCopied ? "もう一度コピー" : "記入枠にコピー"}
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -900,12 +884,23 @@ function MinutesKnowledgePanel({
 // Quick Post Box (フィードトップのカジュアルな投稿エリア)
 // ---------------------------------------------------------------------------
 
+interface QuickPostPrefillData {
+  body: string;
+  tags: string[];
+  category: KnowledgeCategory;
+  sourceInfo?: string; // 出典情報（議事録ファイル名など）
+}
+
 function QuickPostBox({
   currentUser,
   onSubmit,
+  prefillData,
+  onPrefillConsumed,
 }: {
   currentUser: string;
   onSubmit: (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[] }) => void;
+  prefillData?: QuickPostPrefillData | null;
+  onPrefillConsumed?: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [body, setBody] = useState("");
@@ -965,6 +960,31 @@ function QuickPostBox({
       });
     }
   }, [isExpanded, showComparison, recalcHeight]);
+
+  // 外部からのprefillデータを受け取った時に展開＆入力
+  useEffect(() => {
+    if (prefillData) {
+      // 出典情報があれば本文に追加
+      const bodyWithSource = prefillData.sourceInfo
+        ? `${prefillData.body}\n\n---\n${prefillData.sourceInfo}`
+        : prefillData.body;
+
+      setBody(bodyWithSource);
+      setCategory(prefillData.category);
+      setSuggestedTags(prefillData.tags);
+      setIsExpanded(true);
+      setTextareaH(EXPANDED_MIN);
+
+      // 次フレームでフォーカス
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        recalcHeight();
+      });
+
+      // 消費を通知
+      onPrefillConsumed?.();
+    }
+  }, [prefillData, onPrefillConsumed, recalcHeight]);
 
   const handleExpand = () => {
     if (!isExpanded) {
@@ -1737,6 +1757,9 @@ export default function KnowledgePage() {
   // Current user's team
   const currentUserTeam = currentUser ? USER_TEAM_MAP[currentUser] : null;
 
+  // Prefill data for QuickPostBox (from MinutesKnowledgePanel)
+  const [prefillData, setPrefillData] = useState<QuickPostPrefillData | null>(null);
+
   // チームタブ切り替え時に自チームをデフォルト選択
   const handleScopeChange = (scope: ViewScope) => {
     setViewScope(scope);
@@ -1954,12 +1977,17 @@ export default function KnowledgePage() {
 
       {/* Quick Post Box (top-level, full width) */}
       {currentUser && (
-        <QuickPostBox currentUser={currentUser} onSubmit={handleNewPost} />
+        <QuickPostBox
+          currentUser={currentUser}
+          onSubmit={handleNewPost}
+          prefillData={prefillData}
+          onPrefillConsumed={() => setPrefillData(null)}
+        />
       )}
 
       {/* Minutes Knowledge Panel (議事録からナレッジ自動投稿) */}
       {currentUser && (
-        <MinutesKnowledgePanel currentUser={currentUser} onSubmit={handleNewPost} />
+        <MinutesKnowledgePanel onCopyToEditor={setPrefillData} />
       )}
 
       {/* Scope Tabs + Compact Search */}
