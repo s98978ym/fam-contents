@@ -155,63 +155,53 @@ export function useGoogleAuth() {
     }
   }, []);
 
-  // Login with popup
+  // Login with popup - using token flow (simpler, no redirect_uri issues)
   const login = useCallback(() => {
     if (!oauthConfig?.clientId || !gsiLoaded) {
       setState((s) => ({ ...s, error: "Google Sign-In not ready" }));
       return;
     }
 
-    // Use OAuth2 code flow for better token management
-    const client = window.google.accounts.oauth2.initCodeClient({
+    // Use token flow - simpler and works without redirect_uri configuration
+    const client = window.google.accounts.oauth2.initTokenClient({
       client_id: oauthConfig.clientId,
       scope: SCOPES,
-      ux_mode: "popup",
-      select_account: true, // Always show account chooser
-      callback: async (response: { code?: string; error?: string }) => {
+      prompt: "select_account", // Always show account chooser
+      callback: async (response: { access_token?: string; error?: string; expires_in?: number }) => {
         if (response.error) {
           setState((s) => ({ ...s, error: response.error || "Login failed" }));
           return;
         }
 
-        if (!response.code) {
-          setState((s) => ({ ...s, error: "No authorization code received" }));
+        if (!response.access_token) {
+          setState((s) => ({ ...s, error: "No access token received" }));
           return;
         }
 
-        // Exchange code for tokens
         try {
-          // For popup mode, use "postmessage" as redirect_uri
-          const tokenResponse = await fetch("/api/auth/google", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              code: response.code,
-              redirect_uri: "postmessage",
-            }),
+          // Get user info directly with the access token
+          const userInfoResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+            headers: { Authorization: `Bearer ${response.access_token}` },
           });
-
-          if (!tokenResponse.ok) {
-            const error = await tokenResponse.json();
-            throw new Error(error.error || "Token exchange failed");
-          }
-
-          const tokens = await tokenResponse.json();
+          const userInfo = await userInfoResponse.json();
 
           // Save to localStorage
           const authData = {
-            accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
-            expiresAt: Date.now() + tokens.expires_in * 1000,
-            user: tokens.user,
+            accessToken: response.access_token,
+            expiresAt: Date.now() + (response.expires_in || 3600) * 1000,
+            user: {
+              email: userInfo.email,
+              name: userInfo.name,
+              picture: userInfo.picture,
+            },
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(authData));
 
           setState({
             isLoading: false,
             isAuthenticated: true,
-            user: tokens.user,
-            accessToken: tokens.access_token,
+            user: authData.user,
+            accessToken: response.access_token,
             error: null,
           });
         } catch (err) {
@@ -223,7 +213,7 @@ export function useGoogleAuth() {
       },
     });
 
-    client.requestCode();
+    client.requestAccessToken();
   }, [oauthConfig, gsiLoaded]);
 
   // Logout
@@ -257,13 +247,12 @@ declare global {
     google: {
       accounts: {
         oauth2: {
-          initCodeClient: (config: {
+          initTokenClient: (config: {
             client_id: string;
             scope: string;
-            ux_mode: string;
-            select_account?: boolean;
-            callback: (response: { code?: string; error?: string }) => void;
-          }) => { requestCode: () => void };
+            prompt?: string;
+            callback: (response: { access_token?: string; error?: string; expires_in?: number }) => void;
+          }) => { requestAccessToken: () => void };
         };
       };
       picker: {
