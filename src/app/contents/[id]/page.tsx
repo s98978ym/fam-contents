@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useGoogleAuth } from "@/lib/use_google_auth";
 import {
   CHANNEL_LABELS,
   CHANNEL_OPTIONS,
@@ -223,11 +224,14 @@ const CATEGORY_CONFIG = [
 
 export default function FolderDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const folderId = params.id as string;
+  const googleAuth = useGoogleAuth();
 
   const [folder, setFolder] = useState<DriveFolder | null>(null);
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [needsAuth, setNeedsAuth] = useState(false);
   const [step, setStep] = useState(1);
 
   // File add
@@ -250,20 +254,69 @@ export default function FolderDetailPage() {
   const [promptVersions, setPromptVersions] = useState<{ id: string; name: string; type: string; version: number }[]>([]);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/drive/folders").then((r) => r.json()),
-      fetch(`/api/drive/files?folderId=${folderId}`).then((r) => r.json()),
-      fetch("/api/prompt-versions").then((r) => r.json()),
-    ]).then(([foldersData, filesData, prompts]) => {
-      const foldersList = foldersData.folders || [];
-      const filesList = filesData.files || [];
-      setFolder(foldersList.find((fd: DriveFolder) => fd.id === folderId) ?? null);
-      setDriveFiles(filesList);
-      setPromptVersions(prompts);
-      setWizardFiles(driveToWizardFiles(filesList));
+    // First, try to load from sessionStorage (set by contents page after folder selection)
+    const storedFolder = sessionStorage.getItem("contentFolder");
+    if (storedFolder) {
+      try {
+        const parsed = JSON.parse(storedFolder);
+        if (parsed.id === folderId) {
+          // Found matching folder data in sessionStorage
+          setFolder({
+            id: parsed.id,
+            name: parsed.name,
+            url: "",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+          const files = parsed.files || [];
+          setDriveFiles(files);
+          setWizardFiles(driveToWizardFiles(files));
+          // Fetch prompt versions
+          fetch("/api/prompt-versions").then((r) => r.json()).then(setPromptVersions);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // Invalid stored data, continue with other methods
+      }
+    }
+
+    // If no sessionStorage data, check if we have Google Auth
+    if (googleAuth.isLoading) {
+      // Wait for auth to load
+      return;
+    }
+
+    if (googleAuth.isAuthenticated && googleAuth.accessToken) {
+      // Fetch files using OAuth
+      Promise.all([
+        fetch(`/api/drive/oauth/files?folderId=${folderId}`, {
+          headers: { Authorization: `Bearer ${googleAuth.accessToken}` },
+        }).then((r) => r.json()),
+        fetch("/api/prompt-versions").then((r) => r.json()),
+      ]).then(([filesData, prompts]) => {
+        const files = filesData.files || [];
+        setFolder({
+          id: folderId,
+          name: filesData.folderName || "Google Drive フォルダ",
+          url: "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        setDriveFiles(files);
+        setWizardFiles(driveToWizardFiles(files));
+        setPromptVersions(prompts);
+        setLoading(false);
+      }).catch(() => {
+        setNeedsAuth(true);
+        setLoading(false);
+      });
+    } else {
+      // No stored data and not authenticated - need to go back to folder selection
+      setNeedsAuth(true);
       setLoading(false);
-    });
-  }, [folderId]);
+    }
+  }, [folderId, googleAuth.isLoading, googleAuth.isAuthenticated, googleAuth.accessToken]);
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true);
@@ -397,6 +450,30 @@ export default function FolderDetailPage() {
   };
 
   if (loading) return <div className="text-center py-16 text-gray-400">読み込み中...</div>;
+
+  if (needsAuth) {
+    return (
+      <div className="text-center py-16">
+        <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center">
+          <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">認証が必要です</h3>
+        <p className="text-sm text-gray-600 mb-6">
+          このフォルダにアクセスするには、<br />
+          Googleアカウントでログインしてください。
+        </p>
+        <button
+          onClick={() => router.push("/contents")}
+          className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          フォルダ選択に戻る
+        </button>
+      </div>
+    );
+  }
+
   if (!folder) return <div className="text-center py-16 text-gray-400">フォルダが見つかりません</div>;
 
   const categorized = categorize(driveFiles);
