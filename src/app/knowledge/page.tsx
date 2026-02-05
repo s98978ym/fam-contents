@@ -560,22 +560,19 @@ function PostCard({
 // Minutes Knowledge Panel (議事録からナレッジ自動投稿)
 // ---------------------------------------------------------------------------
 
-interface DriveFolder {
-  id: string;
-  name: string;
-  url: string;
-  createdAt: string;
-  updatedAt: string;
+interface DriveConfig {
+  configured: boolean;
+  serviceAccountEmail: string | null;
+  message: string;
 }
 
 interface DriveFile {
   id: string;
-  folderId: string;
   name: string;
   mimeType: string;
   category: "minutes" | "transcript" | "photo" | "other";
-  url: string;
-  createdAt: string;
+  webViewLink?: string;
+  createdTime?: string;
 }
 
 interface KnowledgeCandidate {
@@ -597,11 +594,13 @@ function MinutesKnowledgePanel({
   const [isOpen, setIsOpen] = useState(false);
 
   // Drive state
-  const [folders, setFolders] = useState<DriveFolder[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [driveConfig, setDriveConfig] = useState<DriveConfig | null>(null);
+  const [folderUrl, setFolderUrl] = useState("");
+  const [folderName, setFolderName] = useState("");
   const [files, setFiles] = useState<DriveFile[]>([]);
-  const [loadingFolders, setLoadingFolders] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [emailCopied, setEmailCopied] = useState(false);
 
   // Extraction state
   const [extracting, setExtracting] = useState(false);
@@ -613,42 +612,53 @@ function MinutesKnowledgePanel({
   // Copied state（どの候補を記入枠にコピーしたか）
   const [copiedIds, setCopiedIds] = useState<Set<string>>(new Set());
 
-  // Fetch folders on open
+  // Fetch drive config on open
   useEffect(() => {
-    if (isOpen && folders.length === 0) {
-      setLoadingFolders(true);
-      fetch("/api/drive/folders")
+    if (isOpen && !driveConfig) {
+      fetch("/api/drive/config")
         .then((r) => r.json())
-        .then((data) => {
-          setFolders(data.folders || []);
-          setLoadingFolders(false);
-        })
-        .catch(() => setLoadingFolders(false));
+        .then((data: DriveConfig) => setDriveConfig(data))
+        .catch(() => setDriveConfig(null));
     }
-  }, [isOpen, folders.length]);
+  }, [isOpen, driveConfig]);
 
-  // Fetch files when folder changes
-  useEffect(() => {
-    if (!selectedFolderId) {
-      setFiles([]);
-      return;
-    }
+  // Fetch files from folder URL
+  const handleFetchFiles = async () => {
+    if (!folderUrl.trim()) return;
     setLoadingFiles(true);
+    setDriveError(null);
     setCandidates([]);
     setSelectedCandidateId(null);
     setExtractSource(null);
     setExtractFallbackReason(null);
-    fetch(`/api/drive/files?folderId=${selectedFolderId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setFiles(Array.isArray(data) ? data : []);
-        setLoadingFiles(false);
-      })
-      .catch(() => setLoadingFiles(false));
-  }, [selectedFolderId]);
+
+    try {
+      const res = await fetch(`/api/drive/files?folderUrl=${encodeURIComponent(folderUrl.trim())}`);
+      const data = await res.json();
+      if (data.error) {
+        setDriveError(data.error);
+        setFiles([]);
+      } else {
+        setFiles(data.files || []);
+        setFolderName(folderUrl.split("/").pop() || "フォルダ");
+      }
+    } catch {
+      setDriveError("ファイル一覧の取得に失敗しました");
+      setFiles([]);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  const handleCopyEmail = () => {
+    if (driveConfig?.serviceAccountEmail) {
+      navigator.clipboard.writeText(driveConfig.serviceAccountEmail);
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 2000);
+    }
+  };
 
   const minutesFiles = files.filter((f) => f.category === "minutes" || f.category === "transcript");
-  const selectedFolder = folders.find((f) => f.id === selectedFolderId);
 
   const handleExtract = async () => {
     if (minutesFiles.length === 0) return;
@@ -664,7 +674,7 @@ function MinutesKnowledgePanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           files: files.map((f) => ({ name: f.name, category: f.category })),
-          folderName: selectedFolder?.name || "",
+          folderName: folderName || "",
         }),
       });
       const data = await res.json();
@@ -727,41 +737,74 @@ function MinutesKnowledgePanel({
       >
         <div className="overflow-hidden">
           <div className="pt-3 space-y-3">
-            {/* Step 1: Folder selection */}
+            {/* Step 1: Share folder with service account */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Google Drive フォルダを選択
-              </h4>
-              {loadingFolders ? (
-                <div className="text-sm text-gray-400 py-2">フォルダを読み込み中...</div>
-              ) : folders.length === 0 ? (
-                <div className="text-sm text-gray-400 py-2">フォルダが見つかりません</div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {folders.map((folder) => (
-                    <button
-                      key={folder.id}
-                      onClick={() => setSelectedFolderId(folder.id === selectedFolderId ? null : folder.id)}
-                      className={`px-3 py-2 rounded-lg text-sm border transition-all ${
-                        selectedFolderId === folder.id
-                          ? "bg-indigo-50 border-indigo-300 text-indigo-700 font-medium shadow-sm"
-                          : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <svg className="w-4 h-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                        </svg>
-                        {folder.name}
-                      </div>
-                    </button>
-                  ))}
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">1</div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-gray-800 mb-1">フォルダをサービスアカウントに共有</h4>
+                  {driveConfig?.configured && driveConfig.serviceAccountEmail ? (
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-md px-3 py-2">
+                      <code className="text-xs text-gray-600 flex-1 truncate">{driveConfig.serviceAccountEmail}</code>
+                      <button
+                        onClick={handleCopyEmail}
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium whitespace-nowrap"
+                      >
+                        {emailCopied ? "コピー済み" : "コピー"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-600">サービスアカウントが未設定（シミュレーションモードで動作）</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Google Driveでフォルダを開き「共有」からこのメールアドレスを追加</p>
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Step 2: File list */}
-            {selectedFolderId && (
+            {/* Step 2: Enter folder URL */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">2</div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-gray-800 mb-1">フォルダURLを入力</h4>
+                  <input
+                    type="text"
+                    value={folderUrl}
+                    onChange={(e) => setFolderUrl(e.target.value)}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
+                    onKeyDown={(e) => { if (e.key === "Enter") handleFetchFiles(); }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: Fetch files */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">3</div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-gray-800 mb-2">ファイル一覧を取得</h4>
+                  <button
+                    onClick={handleFetchFiles}
+                    disabled={!folderUrl.trim() || loadingFiles}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      !folderUrl.trim() || loadingFiles
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-indigo-600 text-white hover:bg-indigo-700"
+                    }`}
+                  >
+                    {loadingFiles ? "取得中..." : "ファイルを取得"}
+                  </button>
+                  {driveError && (
+                    <p className="text-xs text-red-600 mt-2">{driveError}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* File list */}
+            {files.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg p-4">
                 <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                   議事録ファイル
