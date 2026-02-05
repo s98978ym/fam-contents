@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isDriveAvailable, extractFolderIdFromUrl, listFilesInFolder, categorizeFile, type DriveFile } from "@/lib/google_drive";
+import { isDriveAvailable, listFilesInFolder, categorizeFile, type DriveFile } from "@/lib/google_drive";
 import { driveFileStore } from "@/lib/drive_store";
 
 // ---------------------------------------------------------------------------
@@ -18,28 +18,24 @@ interface FileWithCategory {
 }
 
 // ---------------------------------------------------------------------------
-// GET: フォルダ内のファイル一覧を取得（クエリパラメータ版）
+// GET: フォルダ内のファイル一覧を取得
 // ---------------------------------------------------------------------------
 
-export async function GET(req: NextRequest) {
-  const folderId = req.nextUrl.searchParams.get("folderId");
-  const folderUrl = req.nextUrl.searchParams.get("folderUrl");
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ folderId: string }> }
+) {
+  const { folderId } = await params;
 
-  // URLからIDを抽出
-  let resolvedFolderId = folderId;
-  if (!resolvedFolderId && folderUrl) {
-    resolvedFolderId = extractFolderIdFromUrl(folderUrl);
-  }
-
-  if (!resolvedFolderId) {
-    return NextResponse.json({ error: "folderId or folderUrl is required" }, { status: 400 });
+  if (!folderId) {
+    return NextResponse.json({ error: "folderId is required" }, { status: 400 });
   }
 
   // Drive API が利用可能な場合
   if (isDriveAvailable) {
     try {
-      console.log(`[drive/files] Fetching from Google Drive API for folder: ${resolvedFolderId}`);
-      const driveFiles = await listFilesInFolder(resolvedFolderId);
+      console.log(`[drive/folders/${folderId}/files] Fetching from Google Drive API`);
+      const driveFiles = await listFilesInFolder(folderId);
 
       const files: FileWithCategory[] = driveFiles.map((file: DriveFile) => ({
         id: file.id,
@@ -67,7 +63,7 @@ export async function GET(req: NextRequest) {
         source: "google_drive" as const,
       });
     } catch (error) {
-      console.error("[drive/files] API error:", error);
+      console.error(`[drive/folders/${folderId}/files] API error:`, error);
       return NextResponse.json({
         error: "Google Driveからファイル一覧を取得できませんでした",
         details: error instanceof Error ? error.message : String(error),
@@ -77,8 +73,8 @@ export async function GET(req: NextRequest) {
   }
 
   // フォールバック: モックデータ
-  console.log("[drive/files] Using mock data");
-  const mockFiles = driveFileStore.listByFolder(resolvedFolderId);
+  console.log(`[drive/folders/${folderId}/files] Using mock data`);
+  const mockFiles = driveFileStore.listByFolder(folderId);
 
   const files: FileWithCategory[] = mockFiles.map((f) => ({
     id: f.id,
@@ -103,23 +99,4 @@ export async function GET(req: NextRequest) {
     source: "simulation" as const,
     fallback_reason: "GOOGLE_SERVICE_ACCOUNT_EMAIL または GOOGLE_PRIVATE_KEY が未設定",
   });
-}
-
-// ---------------------------------------------------------------------------
-// POST: ファイル情報を登録（ローカルアップロード用）
-// ---------------------------------------------------------------------------
-
-export async function POST(req: Request) {
-  const body = await req.json();
-  if (!body.folderId || !body.name) {
-    return NextResponse.json({ error: "folderId and name are required" }, { status: 400 });
-  }
-  const file = driveFileStore.create({
-    folderId: body.folderId,
-    name: body.name,
-    mimeType: body.mimeType ?? "application/octet-stream",
-    category: body.category ?? "other",
-    url: body.url ?? "",
-  });
-  return NextResponse.json({ file, source: "local" as const }, { status: 201 });
 }

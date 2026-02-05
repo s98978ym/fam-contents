@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -196,6 +196,31 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 // Step 1: File Registration (blog-cms style with categorized view)
 // ---------------------------------------------------------------------------
 
+// Drive API response type
+interface DriveFilesResponse {
+  files: Array<{
+    id: string;
+    name: string;
+    mimeType: string;
+    category: "minutes" | "transcript" | "photo" | "other";
+    webViewLink?: string;
+    thumbnailLink?: string;
+  }>;
+  source: "google_drive" | "simulation" | "error";
+  fallback_reason?: string;
+  error?: string;
+}
+
+// Map Drive category to FileEntry type
+function mapDriveCategoryToType(category: string): FileEntry["type"] {
+  switch (category) {
+    case "minutes": return "minutes";
+    case "transcript": return "minutes";
+    case "photo": return "photo";
+    default: return "other";
+  }
+}
+
 export function StepFiles({
   folder,
   setFolder,
@@ -209,6 +234,66 @@ export function StepFiles({
 }) {
   const [newFile, setNewFile] = useState<Omit<FileEntry, "id" | "addedAt" | "selected" | "isEyecatch">>({ name: "", type: "photo", driveUrl: "" });
   const [dragOver, setDragOver] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [driveSource, setDriveSource] = useState<"google_drive" | "simulation" | "error" | null>(null);
+  const [driveError, setDriveError] = useState<string | null>(null);
+
+  // Fetch files from Google Drive folder
+  const fetchDriveFiles = useCallback(async (folderUrl: string) => {
+    if (!folderUrl.includes("drive.google.com")) return;
+
+    setLoading(true);
+    setDriveError(null);
+
+    try {
+      const resp = await fetch(`/api/drive/files?folderUrl=${encodeURIComponent(folderUrl)}`);
+      const data: DriveFilesResponse = await resp.json();
+
+      if (data.error) {
+        setDriveError(data.error);
+        setDriveSource("error");
+        return;
+      }
+
+      setDriveSource(data.source);
+
+      // Convert Drive files to FileEntry format
+      const driveFiles: FileEntry[] = data.files.map((f) => ({
+        id: f.id,
+        name: f.name,
+        type: mapDriveCategoryToType(f.category),
+        driveUrl: f.webViewLink || "",
+        addedAt: new Date().toISOString(),
+        selected: true,
+        isEyecatch: false,
+      }));
+
+      // Merge with existing files (avoid duplicates by id)
+      const existingIds = new Set(files.map((f) => f.id));
+      const newFiles = driveFiles.filter((f) => !existingIds.has(f.id));
+      if (newFiles.length > 0) {
+        setFiles([...files, ...newFiles]);
+      }
+    } catch (err) {
+      setDriveError(err instanceof Error ? err.message : "フォルダの読み込みに失敗しました");
+      setDriveSource("error");
+    } finally {
+      setLoading(false);
+    }
+  }, [files, setFiles]);
+
+  // Handle folder URL change
+  const handleFolderUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newUrl = e.target.value;
+    setFolder({ ...folder, url: newUrl });
+  };
+
+  // Fetch files button handler
+  const handleFetchFiles = () => {
+    if (folder.url) {
+      fetchDriveFiles(folder.url);
+    }
+  };
 
   function addFile() {
     if (!newFile.name || !newFile.driveUrl) return;
@@ -244,16 +329,59 @@ export function StepFiles({
       <div>
         <h4 className="text-sm font-bold text-gray-800 border-b pb-1 mb-3">Google Drive フォルダ登録</h4>
         <p className="text-xs text-gray-500 mb-3">コンテンツ素材を管理するDriveフォルダを指定してください。フォルダ内のファイルが自動的に分類されます。</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
+        <div className="grid grid-cols-12 gap-3">
+          <div className="col-span-3">
             <Label>フォルダ名</Label>
             <Input value={folder.name} onChange={(e) => setFolder({ ...folder, name: e.target.value })} placeholder="例: camp_001_spring_academy" />
           </div>
-          <div>
+          <div className="col-span-7">
             <Label hint="Google DriveのフォルダURL">フォルダURL</Label>
-            <Input value={folder.url} onChange={(e) => setFolder({ ...folder, url: e.target.value })} placeholder="https://drive.google.com/drive/folders/..." />
+            <Input value={folder.url} onChange={handleFolderUrlChange} placeholder="https://drive.google.com/drive/folders/..." />
+          </div>
+          <div className="col-span-2 flex items-end">
+            <button
+              type="button"
+              onClick={handleFetchFiles}
+              disabled={loading || !folder.url.includes("drive.google.com")}
+              className={`px-4 py-2 rounded-md text-sm font-medium w-full transition-all ${
+                loading ? "bg-gray-300 text-gray-500" :
+                !folder.url.includes("drive.google.com") ? "bg-gray-200 text-gray-400 cursor-not-allowed" :
+                "bg-indigo-600 text-white hover:bg-indigo-700"
+              }`}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  読込中
+                </span>
+              ) : "取得"}
+            </button>
           </div>
         </div>
+
+        {/* Drive source indicator */}
+        {driveSource && (
+          <div className="mt-3">
+            {driveSource === "google_drive" && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full font-medium">Google Drive</span>
+                <span className="text-gray-500">実際のGoogle Driveからファイルを取得しました</span>
+              </div>
+            )}
+            {driveSource === "simulation" && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full font-medium">シミュレーション</span>
+                <span className="text-gray-500">Google Drive APIが未設定のため、サンプルデータを表示しています</span>
+              </div>
+            )}
+            {driveSource === "error" && driveError && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full font-medium">エラー</span>
+                <span className="text-red-600">{driveError}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* File Registration with drag-and-drop area */}
