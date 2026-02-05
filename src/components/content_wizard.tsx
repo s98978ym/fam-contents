@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -209,6 +209,13 @@ interface DriveFilesResponse {
   source: "google_drive" | "simulation" | "error";
   fallback_reason?: string;
   error?: string;
+  hint?: string;
+}
+
+interface DriveConfig {
+  configured: boolean;
+  serviceAccountEmail: string | null;
+  message: string;
 }
 
 // Map Drive category to FileEntry type
@@ -237,6 +244,16 @@ export function StepFiles({
   const [loading, setLoading] = useState(false);
   const [driveSource, setDriveSource] = useState<"google_drive" | "simulation" | "error" | null>(null);
   const [driveError, setDriveError] = useState<string | null>(null);
+  const [driveHint, setDriveHint] = useState<string | null>(null);
+  const [driveConfig, setDriveConfig] = useState<DriveConfig | null>(null);
+
+  // Fetch Drive config on mount
+  useEffect(() => {
+    fetch("/api/drive/config")
+      .then((r) => r.json())
+      .then((data: DriveConfig) => setDriveConfig(data))
+      .catch(() => setDriveConfig(null));
+  }, []);
 
   // Fetch files from Google Drive folder
   const fetchDriveFiles = useCallback(async (folderUrl: string) => {
@@ -244,6 +261,7 @@ export function StepFiles({
 
     setLoading(true);
     setDriveError(null);
+    setDriveHint(null);
 
     try {
       const resp = await fetch(`/api/drive/files?folderUrl=${encodeURIComponent(folderUrl)}`);
@@ -251,6 +269,7 @@ export function StepFiles({
 
       if (data.error) {
         setDriveError(data.error);
+        setDriveHint(data.hint || null);
         setDriveSource("error");
         return;
       }
@@ -328,7 +347,32 @@ export function StepFiles({
       {/* Drive Folder */}
       <div>
         <h4 className="text-sm font-bold text-gray-800 border-b pb-1 mb-3">Google Drive フォルダ登録</h4>
-        <p className="text-xs text-gray-500 mb-3">コンテンツ素材を管理するDriveフォルダを指定してください。フォルダ内のファイルが自動的に分類されます。</p>
+        <p className="text-xs text-gray-500 mb-2">コンテンツ素材を管理するDriveフォルダを指定してください。フォルダ内のファイルが自動的に分類されます。</p>
+
+        {/* Service Account sharing instructions */}
+        {driveConfig?.configured && driveConfig.serviceAccountEmail && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3">
+            <div className="flex items-start gap-2">
+              <span className="text-blue-500 mt-0.5">ℹ️</span>
+              <div className="text-xs text-blue-700">
+                <p className="font-medium mb-1">フォルダの共有設定が必要です</p>
+                <p className="mb-2">Google Driveでフォルダを開き、「共有」から以下のメールアドレスを追加してください：</p>
+                <code className="bg-blue-100 px-2 py-1 rounded text-blue-800 font-mono text-xs select-all">{driveConfig.serviceAccountEmail}</code>
+              </div>
+            </div>
+          </div>
+        )}
+        {driveConfig && !driveConfig.configured && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-3">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-500 mt-0.5">⚠️</span>
+              <div className="text-xs text-amber-700">
+                <p className="font-medium">シミュレーションモード</p>
+                <p>Google Drive APIが設定されていないため、サンプルデータが表示されます。</p>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-3">
             <Label>フォルダ名</Label>
@@ -375,9 +419,17 @@ export function StepFiles({
               </div>
             )}
             {driveSource === "error" && driveError && (
-              <div className="flex items-center gap-2 text-xs">
-                <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full font-medium">エラー</span>
-                <span className="text-red-600">{driveError}</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full font-medium">エラー</span>
+                  <span className="text-red-600">{driveError}</span>
+                </div>
+                {driveHint && driveConfig?.serviceAccountEmail && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-2 text-xs text-red-700">
+                    <p>{driveHint}</p>
+                    <p className="mt-1">共有先: <code className="bg-red-100 px-1 rounded font-mono">{driveConfig.serviceAccountEmail}</code></p>
+                  </div>
+                )}
               </div>
             )}
           </div>
