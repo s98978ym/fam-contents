@@ -444,7 +444,7 @@ function PostCard({
       {/* Content */}
       <div className="mt-4">
         <h3 className="text-lg font-bold text-gray-900 mb-2">{post.title}</h3>
-        <div className="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed line-clamp-4">
+        <div className="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed">
           {post.body}
         </div>
 
