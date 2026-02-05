@@ -269,6 +269,8 @@ function PostCard({
   onLike,
   onComment,
   onTagClick,
+  onArchive,
+  onDelete,
   compact = false,
 }: {
   post: KnowledgePost;
@@ -277,15 +279,27 @@ function PostCard({
   onLike: (postId: string) => void;
   onComment: (postId: string, body: string) => void;
   onTagClick: (tag: string) => void;
+  onArchive?: (postId: string, archived: boolean) => void;
+  onDelete?: (postId: string) => void;
   compact?: boolean;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isLiked = currentUser ? post.likes.includes(currentUser) : false;
   const postComments = comments.filter((c) => c.post_id === post.id);
   const config = CATEGORY_CONFIG[post.category];
+
+  // 権限チェック
+  const isAuthor = currentUser === post.author;
+  const currentUserTeam = currentUser ? USER_TEAM_MAP[currentUser] : null;
+  const postTeam = post.team_id || USER_TEAM_MAP[post.author];
+  const isSameTeam = currentUserTeam && postTeam && currentUserTeam === postTeam;
+  const canArchive = isAuthor || isSameTeam; // 投稿主 or 同じチーム
+  const canDelete = isAuthor; // 投稿主のみ
 
   const handleSubmitComment = async () => {
     if (!newComment.trim() || submitting) return;
@@ -316,7 +330,19 @@ function PostCard({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+    <div className={`bg-white rounded-xl border p-5 hover:shadow-md transition-shadow ${
+      post.archived ? "border-amber-200 bg-amber-50/30" : "border-gray-200"
+    }`}>
+      {/* Archived badge */}
+      {post.archived && (
+        <div className="mb-3 flex items-center gap-2 text-xs text-amber-700 bg-amber-100 px-3 py-1.5 rounded-lg">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          </svg>
+          アーカイブ済み{post.archived_by && ` (by ${post.archived_by})`}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start gap-3">
         <Avatar name={post.author} size="lg" />
@@ -338,7 +364,82 @@ function PostCard({
             {config.label}
           </button>
         </div>
+
+        {/* Menu button */}
+        {(canArchive || canDelete) && (
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+
+            {/* Dropdown menu */}
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-8 z-20 w-40 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+                  {canArchive && onArchive && (
+                    <button
+                      onClick={() => {
+                        onArchive(post.id, !post.archived);
+                        setShowMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      {post.archived ? "アーカイブ解除" : "アーカイブ"}
+                    </button>
+                  )}
+                  {canDelete && onDelete && (
+                    <button
+                      onClick={() => {
+                        setConfirmDelete(true);
+                        setShowMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      削除
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-700 mb-2">この投稿を削除しますか？この操作は取り消せません。</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                onDelete?.(post.id);
+                setConfirmDelete(false);
+              }}
+              className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-md hover:bg-red-700 transition-colors"
+            >
+              削除する
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-md hover:bg-gray-200 transition-colors"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="mt-4">
@@ -456,15 +557,451 @@ function PostCard({
 }
 
 // ---------------------------------------------------------------------------
+// Minutes Knowledge Panel (議事録からナレッジ自動投稿)
+// ---------------------------------------------------------------------------
+
+interface DriveFolder {
+  id: string;
+  name: string;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DriveFile {
+  id: string;
+  folderId: string;
+  name: string;
+  mimeType: string;
+  category: "minutes" | "transcript" | "photo" | "other";
+  url: string;
+  createdAt: string;
+}
+
+interface KnowledgeCandidate {
+  id: string;
+  title: string;
+  summary: string;
+  body: string;
+  tags: string[];
+  category: KnowledgeCategory;
+  speakers: string[];
+  source_file: string;
+}
+
+function MinutesKnowledgePanel({
+  onCopyToEditor,
+}: {
+  onCopyToEditor: (data: { body: string; tags: string[]; category: KnowledgeCategory; sourceInfo: string }) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Drive state
+  const [folders, setFolders] = useState<DriveFolder[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [files, setFiles] = useState<DriveFile[]>([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+
+  // Extraction state
+  const [extracting, setExtracting] = useState(false);
+  const [candidates, setCandidates] = useState<KnowledgeCandidate[]>([]);
+  const [extractSource, setExtractSource] = useState<"gemini" | "simulation" | null>(null);
+  const [extractFallbackReason, setExtractFallbackReason] = useState<string | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+
+  // Copied state（どの候補を記入枠にコピーしたか）
+  const [copiedIds, setCopiedIds] = useState<Set<string>>(new Set());
+
+  // Fetch folders on open
+  useEffect(() => {
+    if (isOpen && folders.length === 0) {
+      setLoadingFolders(true);
+      fetch("/api/drive/folders")
+        .then((r) => r.json())
+        .then((data) => {
+          setFolders(Array.isArray(data) ? data : []);
+          setLoadingFolders(false);
+        })
+        .catch(() => setLoadingFolders(false));
+    }
+  }, [isOpen, folders.length]);
+
+  // Fetch files when folder changes
+  useEffect(() => {
+    if (!selectedFolderId) {
+      setFiles([]);
+      return;
+    }
+    setLoadingFiles(true);
+    setCandidates([]);
+    setSelectedCandidateId(null);
+    setExtractSource(null);
+    setExtractFallbackReason(null);
+    fetch(`/api/drive/files?folderId=${selectedFolderId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setFiles(Array.isArray(data) ? data : []);
+        setLoadingFiles(false);
+      })
+      .catch(() => setLoadingFiles(false));
+  }, [selectedFolderId]);
+
+  const minutesFiles = files.filter((f) => f.category === "minutes" || f.category === "transcript");
+  const selectedFolder = folders.find((f) => f.id === selectedFolderId);
+
+  const handleExtract = async () => {
+    if (minutesFiles.length === 0) return;
+    setExtracting(true);
+    setCandidates([]);
+    setSelectedCandidateId(null);
+    setExtractSource(null);
+    setExtractFallbackReason(null);
+
+    try {
+      const res = await fetch("/api/knowledge/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: files.map((f) => ({ name: f.name, category: f.category })),
+          folderName: selectedFolder?.name || "",
+        }),
+      });
+      const data = await res.json();
+      setCandidates(data.candidates || []);
+      setExtractSource(data.source || "simulation");
+      if (data.fallback_reason) setExtractFallbackReason(data.fallback_reason);
+    } catch (err) {
+      console.error("[MinutesKnowledgePanel] extract error:", err);
+      setExtractSource("simulation");
+      setExtractFallbackReason(`ネットワークエラー: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const handleCopyToEditor = (candidate: KnowledgeCandidate) => {
+    const speakers = candidate.speakers.length > 0 ? candidate.speakers.join("、") : "参加メンバー";
+    const sourceInfo = `出典: ${candidate.source_file}\n発言者: ${speakers}`;
+
+    onCopyToEditor({
+      body: candidate.body,
+      tags: candidate.tags,
+      category: candidate.category,
+      sourceInfo,
+    });
+
+    setCopiedIds((prev) => new Set([...prev, candidate.id]));
+  };
+
+  const handleReset = () => {
+    setCandidates([]);
+    setSelectedCandidateId(null);
+    setExtractSource(null);
+    setExtractFallbackReason(null);
+  };
+
+  return (
+    <div className="mb-4">
+      {/* Toggle button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-50 via-blue-50 to-cyan-50 border border-indigo-200 rounded-xl hover:shadow-sm transition-all text-left"
+      >
+        <svg className="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span className="text-sm font-medium text-indigo-700">議事録からナレッジを自動投稿</span>
+        <svg
+          className={`w-4 h-4 text-indigo-400 ml-auto transition-transform ${isOpen ? "rotate-180" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Panel content */}
+      <div
+        className="grid transition-all duration-300 ease-in-out"
+        style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden">
+          <div className="pt-3 space-y-3">
+            {/* Step 1: Folder selection */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Google Drive フォルダを選択
+              </h4>
+              {loadingFolders ? (
+                <div className="text-sm text-gray-400 py-2">フォルダを読み込み中...</div>
+              ) : folders.length === 0 ? (
+                <div className="text-sm text-gray-400 py-2">フォルダが見つかりません</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {folders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      onClick={() => setSelectedFolderId(folder.id === selectedFolderId ? null : folder.id)}
+                      className={`px-3 py-2 rounded-lg text-sm border transition-all ${
+                        selectedFolderId === folder.id
+                          ? "bg-indigo-50 border-indigo-300 text-indigo-700 font-medium shadow-sm"
+                          : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <svg className="w-4 h-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                        {folder.name}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: File list */}
+            {selectedFolderId && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  議事録ファイル
+                </h4>
+                {loadingFiles ? (
+                  <div className="text-sm text-gray-400 py-2">ファイルを読み込み中...</div>
+                ) : files.length === 0 ? (
+                  <div className="text-sm text-gray-400 py-2">ファイルが見つかりません</div>
+                ) : (
+                  <>
+                    <div className="space-y-1 mb-3">
+                      {files.map((file) => {
+                        const isMinutes = file.category === "minutes" || file.category === "transcript";
+                        return (
+                          <div
+                            key={file.id}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
+                              isMinutes ? "bg-blue-50 text-blue-800" : "bg-gray-50 text-gray-500"
+                            }`}
+                          >
+                            <span className="text-xs">
+                              {file.category === "minutes" ? "📝" : file.category === "transcript" ? "📋" : file.category === "photo" ? "🖼️" : "📄"}
+                            </span>
+                            <span className="flex-1 truncate">{file.name}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                              isMinutes ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"
+                            }`}>
+                              {file.category === "minutes" ? "議事録" : file.category === "transcript" ? "文字起こし" : file.category === "photo" ? "写真" : "その他"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {minutesFiles.length > 0 && candidates.length === 0 && (
+                      <button
+                        onClick={handleExtract}
+                        disabled={extracting}
+                        className="w-full py-2.5 bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-medium rounded-lg hover:from-indigo-600 hover:to-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                      >
+                        {extracting ? (
+                          <>
+                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            ナレッジを抽出中...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            AIで発展（{minutesFiles.length}件の議事録から抽出）
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {minutesFiles.length === 0 && (
+                      <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        議事録・文字起こしファイルが見つかりません。議事録カテゴリのファイルがあるフォルダを選択してください。
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Extraction results */}
+            {candidates.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    抽出されたナレッジ（{candidates.length}件）
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    {/* Source badge */}
+                    {extractSource === "gemini" ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        Gemini
+                      </span>
+                    ) : extractSource === "simulation" ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        シミュレーション
+                      </span>
+                    ) : null}
+                    <button
+                      onClick={handleReset}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      やり直す
+                    </button>
+                  </div>
+                </div>
+
+                {/* Fallback warning */}
+                {extractSource === "simulation" && extractFallbackReason && (
+                  <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                    {extractFallbackReason}
+                  </div>
+                )}
+
+                {/* Candidate cards */}
+                <div className="space-y-2">
+                  {candidates.map((candidate) => {
+                    const isSelected = selectedCandidateId === candidate.id;
+                    const isCopied = copiedIds.has(candidate.id);
+                    const config = CATEGORY_CONFIG[candidate.category];
+
+                    return (
+                      <div
+                        key={candidate.id}
+                        className={`border rounded-lg transition-all ${
+                          isCopied
+                            ? "border-blue-200 bg-blue-50/50"
+                            : isSelected
+                            ? "border-indigo-300 bg-indigo-50/30 shadow-sm"
+                            : "border-gray-200 hover:border-gray-300 hover:shadow-sm cursor-pointer"
+                        }`}
+                      >
+                        {/* Summary row (always visible) */}
+                        <button
+                          onClick={() => setSelectedCandidateId(isSelected ? null : candidate.id)}
+                          className="w-full text-left px-4 py-3 flex items-start gap-3"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-gray-800">{candidate.title}</span>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${config.bgColor} ${config.color}`}>
+                                {config.icon} {config.label}
+                              </span>
+                              {isCopied && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">
+                                  コピー済み
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{candidate.summary}</p>
+                          </div>
+                          <svg
+                            className={`w-4 h-4 text-gray-400 shrink-0 mt-1 transition-transform ${isSelected ? "rotate-180" : ""}`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+
+                        {/* Detail (expanded) */}
+                        <div
+                          className="grid transition-all duration-300 ease-in-out"
+                          style={{ gridTemplateRows: isSelected ? "1fr" : "0fr" }}
+                        >
+                          <div className="overflow-hidden">
+                            <div className="px-4 pb-4 border-t border-gray-100">
+                              {/* Body */}
+                              <div className="mt-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-lg p-3">
+                                {candidate.body}
+                              </div>
+
+                              {/* Meta: source file + speakers */}
+                              <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  {candidate.source_file}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  {candidate.speakers.length > 0 ? candidate.speakers.join("、") : "参加メンバー"}
+                                </div>
+                              </div>
+
+                              {/* Tags */}
+                              {candidate.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-3">
+                                  {candidate.tags.map((tag) => (
+                                    <span key={tag} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px]">
+                                      #{tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Copy to editor button */}
+                              <button
+                                onClick={() => handleCopyToEditor(candidate)}
+                                className={`mt-3 w-full py-2 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                                  isCopied
+                                    ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                }`}
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                </svg>
+                                {isCopied ? "もう一度コピー" : "記入枠にコピー"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Quick Post Box (フィードトップのカジュアルな投稿エリア)
 // ---------------------------------------------------------------------------
+
+interface QuickPostPrefillData {
+  body: string;
+  tags: string[];
+  category: KnowledgeCategory;
+  sourceInfo?: string; // 出典情報（議事録ファイル名など）
+}
 
 function QuickPostBox({
   currentUser,
   onSubmit,
+  prefillData,
+  onPrefillConsumed,
 }: {
   currentUser: string;
   onSubmit: (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[] }) => void;
+  prefillData?: QuickPostPrefillData | null;
+  onPrefillConsumed?: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [body, setBody] = useState("");
@@ -524,6 +1061,31 @@ function QuickPostBox({
       });
     }
   }, [isExpanded, showComparison, recalcHeight]);
+
+  // 外部からのprefillデータを受け取った時に展開＆入力
+  useEffect(() => {
+    if (prefillData) {
+      // 出典情報があれば本文に追加
+      const bodyWithSource = prefillData.sourceInfo
+        ? `${prefillData.body}\n\n---\n${prefillData.sourceInfo}`
+        : prefillData.body;
+
+      setBody(bodyWithSource);
+      setCategory(prefillData.category);
+      setSuggestedTags(prefillData.tags);
+      setIsExpanded(true);
+      setTextareaH(EXPANDED_MIN);
+
+      // 次フレームでフォーカス
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        recalcHeight();
+      });
+
+      // 消費を通知
+      onPrefillConsumed?.();
+    }
+  }, [prefillData, onPrefillConsumed, recalcHeight]);
 
   const handleExpand = () => {
     if (!isExpanded) {
@@ -1296,6 +1858,9 @@ export default function KnowledgePage() {
   // Current user's team
   const currentUserTeam = currentUser ? USER_TEAM_MAP[currentUser] : null;
 
+  // Prefill data for QuickPostBox (from MinutesKnowledgePanel)
+  const [prefillData, setPrefillData] = useState<QuickPostPrefillData | null>(null);
+
   // チームタブ切り替え時に自チームをデフォルト選択
   const handleScopeChange = (scope: ViewScope) => {
     setViewScope(scope);
@@ -1440,6 +2005,33 @@ export default function KnowledgePage() {
     }
   };
 
+  const handleArchive = async (postId: string, archived: boolean) => {
+    if (!currentUser) return;
+    const res = await fetch(`/api/knowledge/${postId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        archived,
+        archived_by: archived ? currentUser : undefined,
+        archived_at: archived ? new Date().toISOString() : undefined,
+      }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setPosts((prev) => prev.map((p) => (p.id === postId ? updated : p)));
+    }
+  };
+
+  const handleDelete = async (postId: string) => {
+    if (!currentUser) return;
+    const res = await fetch(`/api/knowledge/${postId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    }
+  };
+
   const handleNewPost = async (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[] }) => {
     if (!currentUser) return;
     try {
@@ -1513,7 +2105,17 @@ export default function KnowledgePage() {
 
       {/* Quick Post Box (top-level, full width) */}
       {currentUser && (
-        <QuickPostBox currentUser={currentUser} onSubmit={handleNewPost} />
+        <QuickPostBox
+          currentUser={currentUser}
+          onSubmit={handleNewPost}
+          prefillData={prefillData}
+          onPrefillConsumed={() => setPrefillData(null)}
+        />
+      )}
+
+      {/* Minutes Knowledge Panel (議事録からナレッジ自動投稿) */}
+      {currentUser && (
+        <MinutesKnowledgePanel onCopyToEditor={setPrefillData} />
       )}
 
       {/* Scope Tabs + Compact Search */}
@@ -1729,6 +2331,8 @@ export default function KnowledgePage() {
                   onLike={handleLike}
                   onComment={handleComment}
                   onTagClick={handleTagClick}
+                  onArchive={handleArchive}
+                  onDelete={handleDelete}
                 />
               ))
             )}
@@ -1778,6 +2382,8 @@ export default function KnowledgePage() {
                     onLike={handleLike}
                     onComment={handleComment}
                     onTagClick={handleTagClick}
+                    onArchive={handleArchive}
+                    onDelete={handleDelete}
                     compact
                   />
                 ))

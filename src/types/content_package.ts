@@ -159,6 +159,9 @@ export interface KnowledgePost {
   ai_categorized: boolean;   // AIで自動分類されたか
   ai_categorized_at?: string;
   likes: string[];           // いいねしたユーザー名の配列
+  archived: boolean;         // アーカイブ済みか
+  archived_by?: string;      // アーカイブした人
+  archived_at?: string;      // アーカイブ日時
   created_at: string;
   updated_at: string;
 }

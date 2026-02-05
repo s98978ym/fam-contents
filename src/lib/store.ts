@@ -241,13 +241,14 @@ export const auditStore = {
 export const knowledgePostStore = {
   list: () => knowledgePosts,
   get: (id: string) => knowledgePosts.find((p) => p.id === id),
-  create: (data: Omit<KnowledgePost, "id" | "created_at" | "updated_at" | "likes" | "ai_categorized">) => {
+  create: (data: Omit<KnowledgePost, "id" | "created_at" | "updated_at" | "likes" | "ai_categorized" | "archived">) => {
     const now = new Date().toISOString();
     const p: KnowledgePost = {
       ...data,
       id: nextId("kp"),
       likes: [],
       ai_categorized: false,
+      archived: false,
       created_at: now,
       updated_at: now,
     };
