@@ -58,6 +58,52 @@ Google Drive APIとの連携を実装した。
 **対策:**
 - 全APIルートでエラー時にも`fallback_reason: "API呼び出し失敗: [エラー内容]"`を追加
 
+### 4. モジュールレベル副作用によるVercelクライアントサイドエラー
+
+**問題:** Vercel本番環境で「Application error: a client-side exception has occurred」が発生。ローカル開発では問題なかった。
+
+**原因:**
+- `src/lib/google_drive.ts` のモジュールトップレベルで `console.log()` を即時実行していた
+- Next.jsのバンドラは「サーバーサイド専用」とコメントされていてもクライアントバンドルにコードを含めることがある
+- モジュールがインポートされた瞬間に Node.js専用API（`crypto`）が評価され、クライアント側でエラー発生
+
+**問題のコード（修正前）:**
+```typescript
+// モジュール読み込み時に即時実行される
+if (isDriveAvailable) {
+  console.log("[google_drive] Google Drive API: 有効");
+} else {
+  console.log("[google_drive] Google Drive API: 無効");
+}
+```
+
+**修正後のコード:**
+```typescript
+let loggedOnce = false;
+
+function logConnectionStatus(): void {
+  if (loggedOnce) return;
+  loggedOnce = true;
+  if (isDriveAvailable) {
+    console.log("[google_drive] Google Drive API: 有効（サービスアカウント設定済み）");
+  } else {
+    console.log("[google_drive] Google Drive API: 無効（環境変数未設定 → シミュレーションモード）");
+  }
+}
+
+// 各API関数の先頭で呼び出す
+export async function listFilesInFolder(folderId: string): Promise<DriveFile[]> {
+  logConnectionStatus();  // ← ここで初めてログ出力
+  // ...
+}
+```
+
+**教訓:**
+- **モジュールレベルの副作用（即時実行コード）は避ける**
+- ログ出力は関数内で遅延実行（lazy initialization）にする
+- `loggedOnce` フラグで初回API呼び出し時のみ出力
+- ローカルで動いてもVercelでエラーになるケースがある。デプロイ後の動作確認も必須
+
 ## 次回の注意点
 
 ### 実装完了の定義（チェックリスト）
@@ -85,9 +131,10 @@ Google Drive APIとの連携を実装した。
 
 以下をCLAUDE.mdに追加した:
 
-1. **「よくあるミスと対策」に2件追加**
+1. **「よくあるミスと対策」に3件追加**
    - ビルド成功を「実装完了」と誤認
    - 既存ルールの適用範囲を狭く解釈
+   - サーバー専用モジュールのモジュールレベル副作用でVercelクライアントエラー
 
 2. **「外部API連携ルール（共通）」セクションを新設**
    - 実装完了の定義（6項目のチェックリスト）
