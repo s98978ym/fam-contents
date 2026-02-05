@@ -344,26 +344,13 @@ export function StepFiles({
 
   return (
     <div className="space-y-6">
-      {/* Drive Folder */}
+      {/* Drive Folder - Step-by-step guide */}
       <div>
-        <h4 className="text-sm font-bold text-gray-800 border-b pb-1 mb-3">Google Drive フォルダ登録</h4>
-        <p className="text-xs text-gray-500 mb-2">コンテンツ素材を管理するDriveフォルダを指定してください。フォルダ内のファイルが自動的に分類されます。</p>
+        <h4 className="text-sm font-bold text-gray-800 border-b pb-1 mb-4">Google Drive フォルダ登録</h4>
 
-        {/* Service Account sharing instructions */}
-        {driveConfig?.configured && driveConfig.serviceAccountEmail && (
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3">
-            <div className="flex items-start gap-2">
-              <span className="text-blue-500 mt-0.5">ℹ️</span>
-              <div className="text-xs text-blue-700">
-                <p className="font-medium mb-1">フォルダの共有設定が必要です</p>
-                <p className="mb-2">Google Driveでフォルダを開き、「共有」から以下のメールアドレスを追加してください：</p>
-                <code className="bg-blue-100 px-2 py-1 rounded text-blue-800 font-mono text-xs select-all">{driveConfig.serviceAccountEmail}</code>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* シミュレーションモードの場合 */}
         {driveConfig && !driveConfig.configured && (
-          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-3">
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-4">
             <div className="flex items-start gap-2">
               <span className="text-amber-500 mt-0.5">⚠️</span>
               <div className="text-xs text-amber-700">
@@ -373,21 +360,66 @@ export function StepFiles({
             </div>
           </div>
         )}
-        <div className="grid grid-cols-12 gap-3">
-          <div className="col-span-3">
-            <Label>フォルダ名</Label>
-            <Input value={folder.name} onChange={(e) => setFolder({ ...folder, name: e.target.value })} placeholder="例: camp_001_spring_academy" />
+
+        {/* ステップ1: フォルダ共有（API設定時のみ表示） */}
+        {driveConfig?.configured && driveConfig.serviceAccountEmail && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">1</span>
+              <span className="text-sm font-medium text-gray-700">Google Driveでフォルダを共有</span>
+            </div>
+            <div className="ml-8 bg-gray-50 rounded-md p-3">
+              <p className="text-xs text-gray-600 mb-2">以下のメールアドレスにフォルダを共有してください（閲覧者権限で可）</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-white border border-gray-200 px-3 py-2 rounded text-sm font-mono text-gray-800 select-all">{driveConfig.serviceAccountEmail}</code>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(driveConfig.serviceAccountEmail!)}
+                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-medium text-gray-600 transition-colors"
+                >
+                  コピー
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="col-span-7">
-            <Label hint="Google DriveのフォルダURL">フォルダURL</Label>
-            <Input value={folder.url} onChange={handleFolderUrlChange} placeholder="https://drive.google.com/drive/folders/..." />
+        )}
+
+        {/* ステップ2: フォルダURL入力 */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">
+              {driveConfig?.configured ? "2" : "1"}
+            </span>
+            <span className="text-sm font-medium text-gray-700">フォルダURLを入力</span>
           </div>
-          <div className="col-span-2 flex items-end">
+          <div className="ml-8">
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-3">
+                <Label>フォルダ名（任意）</Label>
+                <Input value={folder.name} onChange={(e) => setFolder({ ...folder, name: e.target.value })} placeholder="例: camp_001" />
+              </div>
+              <div className="col-span-9">
+                <Label>フォルダURL</Label>
+                <Input value={folder.url} onChange={handleFolderUrlChange} placeholder="https://drive.google.com/drive/folders/..." />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ステップ3: 取得ボタン */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">
+              {driveConfig?.configured ? "3" : "2"}
+            </span>
+            <span className="text-sm font-medium text-gray-700">ファイルを取得</span>
+          </div>
+          <div className="ml-8">
             <button
               type="button"
               onClick={handleFetchFiles}
               disabled={loading || !folder.url.includes("drive.google.com")}
-              className={`px-4 py-2 rounded-md text-sm font-medium w-full transition-all ${
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
                 loading ? "bg-gray-300 text-gray-500" :
                 !folder.url.includes("drive.google.com") ? "bg-gray-200 text-gray-400 cursor-not-allowed" :
                 "bg-indigo-600 text-white hover:bg-indigo-700"
@@ -396,39 +428,36 @@ export function StepFiles({
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  読込中
+                  読込中...
                 </span>
-              ) : "取得"}
+              ) : "フォルダからファイルを取得"}
             </button>
           </div>
         </div>
 
-        {/* Drive source indicator */}
+        {/* 取得結果 */}
         {driveSource && (
-          <div className="mt-3">
+          <div className="ml-8 mt-3">
             {driveSource === "google_drive" && (
               <div className="flex items-center gap-2 text-xs">
-                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full font-medium">Google Drive</span>
-                <span className="text-gray-500">実際のGoogle Driveからファイルを取得しました</span>
+                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full font-medium">✓ 取得成功</span>
+                <span className="text-gray-500">Google Driveからファイルを取得しました</span>
               </div>
             )}
             {driveSource === "simulation" && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full font-medium">シミュレーション</span>
-                <span className="text-gray-500">Google Drive APIが未設定のため、サンプルデータを表示しています</span>
+                <span className="text-gray-500">サンプルデータを表示しています</span>
               </div>
             )}
             {driveSource === "error" && driveError && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full font-medium">エラー</span>
-                  <span className="text-red-600">{driveError}</span>
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 text-xs">
+                <div className="flex items-center gap-2 text-red-700 font-medium mb-1">
+                  <span>⚠️ エラー</span>
                 </div>
-                {driveHint && driveConfig?.serviceAccountEmail && (
-                  <div className="bg-red-50 border border-red-200 rounded-md p-2 text-xs text-red-700">
-                    <p>{driveHint}</p>
-                    <p className="mt-1">共有先: <code className="bg-red-100 px-1 rounded font-mono">{driveConfig.serviceAccountEmail}</code></p>
-                  </div>
+                <p className="text-red-600 mb-2">{driveError}</p>
+                {driveHint && (
+                  <p className="text-red-600">{driveHint}</p>
                 )}
               </div>
             )}
