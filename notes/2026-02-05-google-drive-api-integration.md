@@ -104,6 +104,27 @@ export async function listFilesInFolder(folderId: string): Promise<DriveFile[]> 
 - `loggedOnce` フラグで初回API呼び出し時のみ出力
 - ローカルで動いてもVercelでエラーになるケースがある。デプロイ後の動作確認も必須
 
+### 5. server-onlyパッケージによる根本対策
+
+**問題:** モジュールレベルの副作用を除去しても、`crypto`モジュール自体のインポートがクライアントバンドルに含まれる可能性があった。
+
+**根本原因:**
+- Next.jsのバンドラはモジュールグラフを解析する際、実行されないコードパスもバンドルに含めることがある
+- コメントで「サーバー専用」と記載してもバンドラは無視する
+
+**対策:**
+```bash
+npm install server-only
+```
+
+```typescript
+// google_drive.ts の先頭
+import "server-only";
+import * as crypto from "crypto";
+```
+
+`server-only`パッケージをインポートすると、クライアントサイドでこのモジュールがインポートされた場合にビルドエラーが発生し、問題を早期に検出できる。
+
 ## 次回の注意点
 
 ### 実装完了の定義（チェックリスト）

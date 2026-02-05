@@ -68,11 +68,20 @@ export async function GET(req: NextRequest) {
       });
     } catch (error) {
       console.error("[drive/files] API error:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // 403/404エラーの場合は共有設定の案内を表示
+      const isPermissionError = errorMessage.includes("403") || errorMessage.includes("404") || errorMessage.includes("not found");
+      const userMessage = isPermissionError
+        ? "フォルダにアクセスできません。Google Driveでフォルダをサービスアカウントに共有してください。"
+        : "Google Driveからファイル一覧を取得できませんでした";
+
       return NextResponse.json({
-        error: "Google Driveからファイル一覧を取得できませんでした",
-        details: error instanceof Error ? error.message : String(error),
+        error: userMessage,
+        details: errorMessage,
         source: "error" as const,
-        fallback_reason: `API呼び出し失敗: ${error instanceof Error ? error.message : String(error)}`,
+        fallback_reason: `API呼び出し失敗: ${errorMessage}`,
+        hint: isPermissionError ? "フォルダの「共有」設定からサービスアカウントのメールアドレスを追加してください" : undefined,
       }, { status: 500 });
     }
   }
