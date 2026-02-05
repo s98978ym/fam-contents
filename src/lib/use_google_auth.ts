@@ -167,6 +167,7 @@ export function useGoogleAuth() {
       client_id: oauthConfig.clientId,
       scope: SCOPES,
       ux_mode: "popup",
+      select_account: true, // Always show account chooser
       callback: async (response: { code?: string; error?: string }) => {
         if (response.error) {
           setState((s) => ({ ...s, error: response.error || "Login failed" }));
@@ -180,12 +181,13 @@ export function useGoogleAuth() {
 
         // Exchange code for tokens
         try {
+          // For popup mode, use "postmessage" as redirect_uri
           const tokenResponse = await fetch("/api/auth/google", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               code: response.code,
-              redirect_uri: window.location.origin,
+              redirect_uri: "postmessage",
             }),
           });
 
@@ -259,6 +261,7 @@ declare global {
             client_id: string;
             scope: string;
             ux_mode: string;
+            select_account?: boolean;
             callback: (response: { code?: string; error?: string }) => void;
           }) => { requestCode: () => void };
         };
