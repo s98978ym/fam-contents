@@ -21,13 +21,15 @@ export async function GET(req: NextRequest) {
     // List files in the folder
     const query = `'${folderId}' in parents and trashed = false`;
     const fields = "files(id,name,mimeType,webViewLink,thumbnailLink,createdTime,size)";
+    // Include shared drives support
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&orderBy=createdTime desc&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
-    const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&orderBy=createdTime desc&pageSize=100`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }
-    );
+    console.log("[drive/oauth/files] Fetching files for folderId:", folderId);
+    console.log("[drive/oauth/files] Query:", query);
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
 
     if (!response.ok) {
       const error = await response.json();
@@ -43,6 +45,8 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await response.json();
+    console.log("[drive/oauth/files] Raw response:", JSON.stringify(data));
+    console.log("[drive/oauth/files] Files count:", data.files?.length || 0);
     const files = (data.files || []).map((file: Record<string, unknown>) => ({
       id: file.id,
       name: file.name,

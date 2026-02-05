@@ -66,18 +66,18 @@ export function useGooglePicker(accessToken: string | null) {
 
       setIsOpen(true);
 
-      // Create a DocsView for folders
+      // Create a DocsView that shows all files + folders
+      // User can navigate into folders and see files inside before selecting
       const docsView = new window.google.picker.DocsView()
         .setIncludeFolders(true)
-        .setSelectFolderEnabled(true)
-        .setMimeTypes("application/vnd.google-apps.folder");
+        .setSelectFolderEnabled(true);
+      // Note: No setMimeTypes - show all files so user can preview folder contents
 
       // Build picker
       const picker = new window.google.picker.PickerBuilder()
         .addView(docsView)
-        .addView(window.google.picker.ViewId.FOLDERS)
         .setOAuthToken(accessToken)
-        .setTitle("フォルダを選択")
+        .setTitle("フォルダを選択（中身を確認してから選択できます）")
         .setCallback((data: GooglePickerResponse) => {
           if (data.action === window.google.picker.Action.PICKED && data.docs?.[0]) {
             const doc = data.docs[0];
