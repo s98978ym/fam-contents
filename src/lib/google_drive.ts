@@ -14,6 +14,13 @@ const privateKey = (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n");
 /** Google Drive API が利用可能かどうか */
 export const isDriveAvailable = serviceAccountEmail.length > 0 && privateKey.length > 0;
 
+// 起動時のログ出力
+if (isDriveAvailable) {
+  console.log("[google_drive] Google Drive API: 有効（サービスアカウント設定済み）");
+} else {
+  console.log("[google_drive] Google Drive API: 無効（環境変数未設定 → シミュレーションモード）");
+}
+
 // ---------------------------------------------------------------------------
 // JWT 生成（サービスアカウント認証用）
 // ---------------------------------------------------------------------------

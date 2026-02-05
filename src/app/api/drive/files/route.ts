@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
         error: "Google Driveからファイル一覧を取得できませんでした",
         details: error instanceof Error ? error.message : String(error),
         source: "error" as const,
+        fallback_reason: `API呼び出し失敗: ${error instanceof Error ? error.message : String(error)}`,
       }, { status: 500 });
     }
   }

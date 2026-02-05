@@ -59,6 +59,7 @@ export async function POST(req: Request) {
         error: "Google Driveへのアクセスに失敗しました。フォルダがサービスアカウントに共有されているか確認してください。",
         details: error instanceof Error ? error.message : String(error),
         source: "error" as const,
+        fallback_reason: `API呼び出し失敗: ${error instanceof Error ? error.message : String(error)}`,
       }, { status: 403 });
     }
   }
