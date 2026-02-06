@@ -26,13 +26,13 @@ interface AnalysisResult {
 // Gemini による素材分析
 // ---------------------------------------------------------------------------
 
-function buildAnalysisPrompt(files: FileInfo[], folderName: string): string {
+function buildAnalysisPrompt(files: FileInfo[], folderName: string, fileContents?: { name: string; content: string }[]): string {
   const fileList = files.map((f) => `- ${f.name}（${f.category}）`).join("\n");
   const minutes = files.filter((f) => f.category === "minutes");
   const transcripts = files.filter((f) => f.category === "transcript");
   const photos = files.filter((f) => f.category === "photo");
 
-  return `あなたはマルチチャネル・コンテンツ運用チームのシニアディレクターです。
+  let prompt = `あなたはマルチチャネル・コンテンツ運用チームのシニアディレクターです。
 アップロードされた素材ファイルを分析し、コンテンツ生成の方向性を判断してください。
 
 ## 素材情報
@@ -44,17 +44,28 @@ ${fileList}
 議事録: ${minutes.length}件
 トランスクリプト: ${transcripts.length}件
 写真: ${photos.length}件
+`;
 
-## 分析の思考プロセス
+  // ファイル内容がある場合、プロンプトに追加
+  if (fileContents && fileContents.length > 0) {
+    prompt += `\n## アップロードされたファイルの内容\n\n以下のファイル内容を踏まえて分析してください。ファイル名だけでなく実際の内容に基づいた分析を行うこと。\n\n`;
+    for (const fc of fileContents) {
+      // 長すぎるファイルは先頭3000文字に制限
+      const truncated = fc.content.length > 3000 ? fc.content.slice(0, 3000) + "\n...（以下省略）" : fc.content;
+      prompt += `### ${fc.name}\n\`\`\`\n${truncated}\n\`\`\`\n\n`;
+    }
+  }
+
+  prompt += `## 分析の思考プロセス
 
 以下の3ステップで分析してください:
 
 Step 1: 議事録で全体把握
-- 議事録があれば、ファイル名から企画の方向性やテーマを推定する
+- 議事録があれば、${fileContents && fileContents.length > 0 ? "ファイル内容から" : "ファイル名から"}企画の方向性やテーマを推定する
 - なければ「議事録なし」としてスキップ
 
 Step 2: トランスクリプトで詳細把握
-- トランスクリプトがあれば、ファイル名から専門的な内容やキーフレーズを推定する
+- トランスクリプトがあれば、${fileContents && fileContents.length > 0 ? "ファイル内容から" : "ファイル名から"}専門的な内容やキーフレーズを推定する
 - なければスキップ
 
 Step 3: 写真の活用判断
@@ -93,6 +104,8 @@ Markdown記号（** * # など）は一切使わない。
   ],
   "direction": "総合判断。どのチャネルの組み合わせが効果的かを端的に提案（150文字以内）"
 }`;
+
+  return prompt;
 }
 
 const ICON_MAP: Record<string, string> = {
@@ -184,7 +197,7 @@ function mockAnalysis(files: FileInfo[]): AnalysisResult {
 
 export async function POST(request: Request) {
   try {
-    const { files, folderName } = await request.json();
+    const { files, folderName, fileContents } = await request.json();
 
     if (!Array.isArray(files) || files.length === 0) {
       return NextResponse.json({ error: "files array is required" }, { status: 400 });
@@ -197,10 +210,20 @@ export async function POST(request: Request) {
       category: (validCategories.includes(f.category as Cat) ? f.category : "other") as FileInfo["category"],
     }));
 
+    // Validate fileContents if provided
+    const validFileContents: { name: string; content: string }[] | undefined =
+      Array.isArray(fileContents) && fileContents.length > 0
+        ? fileContents.filter((fc: { name?: string; content?: string }) => fc.name && fc.content)
+        : undefined;
+
+    if (validFileContents) {
+      console.log(`[analyze] ファイル内容 ${validFileContents.length}件を含むリクエスト`);
+    }
+
     if (isGeminiAvailable) {
       try {
         console.log("[analyze] Gemini API を使用して素材分析を実行...");
-        const prompt = buildAnalysisPrompt(fileInfos, folderName || "");
+        const prompt = buildAnalysisPrompt(fileInfos, folderName || "", validFileContents);
         const raw = await generateJSON<AnalysisResult>(prompt, {
           temperature: 0.3,
           maxOutputTokens: 2048,
