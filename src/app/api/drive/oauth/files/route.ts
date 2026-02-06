@@ -101,7 +101,7 @@ function categorizeFile(file: { name: string; mimeType: string }): "minutes" | "
   }
 
   // Transcript (文字起こし)
-  if (name.includes("transcript") || name.includes("文字起こし")) {
+  if (name.includes("transcript") || name.includes("文字起こし") || name.includes("トランスクリプト")) {
     return "transcript";
   }
 

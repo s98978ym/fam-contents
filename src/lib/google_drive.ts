@@ -183,6 +183,7 @@ export function categorizeFile(file: DriveFile): FileCategory {
     name.includes("transcript") ||
     name.includes("文字起こし") ||
     name.includes("書き起こし") ||
+    name.includes("トランスクリプト") ||
     (mimeType === "text/plain" && (name.includes("mtg") || name.includes("meeting")))
   ) {
     return "transcript";

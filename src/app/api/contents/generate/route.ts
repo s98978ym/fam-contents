@@ -299,10 +299,12 @@ export async function POST(request: Request) {
       try {
         console.log(`[generate] Gemini API でチャネル ${channel} のコンテンツを生成...`);
         const prompt = buildChannelPrompt(ctx);
+        console.log(`[generate] Prompt preview (first 500 chars):`, prompt.slice(0, 500));
         content = await generateJSON<Record<string, unknown>>(prompt, {
           temperature: 0.7,
           maxOutputTokens: 4096,
         });
+        console.log(`[generate] Gemini raw response:`, JSON.stringify(content, null, 2).slice(0, 1000));
         source = "gemini";
         console.log(`[generate] Gemini API 成功: ${channel}`);
       } catch (err) {

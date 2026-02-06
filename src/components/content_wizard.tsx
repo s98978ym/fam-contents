@@ -1197,6 +1197,22 @@ function ReelsPreview({ content, onUpdate }: { content: Record<string, unknown>;
 function StoriesPreview({ content, onUpdate }: { content: Record<string, unknown>; onUpdate?: (key: string, value: string) => void }) {
   const slides = content.slides as { text: string; image_note: string }[] | undefined;
   const [activeSlide, setActiveSlide] = useState(0);
+
+  // Debug: show raw JSON if expected fields are missing
+  const hasExpectedFields = content.story_type || content.poll_question || slides;
+  if (!hasExpectedFields && Object.keys(content).length > 0) {
+    console.log("[StoriesPreview] Unexpected content format:", content);
+    return (
+      <div className="space-y-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-sm text-amber-800 font-medium">生成されたコンテンツ形式が想定と異なります</p>
+          <p className="text-xs text-amber-600 mt-1">期待: story_type, poll_question, slides</p>
+        </div>
+        <pre className="text-xs font-mono bg-gray-100 p-4 rounded-lg overflow-auto max-h-96">{JSON.stringify(content, null, 2)}</pre>
+      </div>
+    );
+  }
+
   return (
     <div className="flex gap-8 items-start">
       <PhoneFrame>
