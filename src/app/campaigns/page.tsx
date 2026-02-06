@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { sampleCampaigns, sampleVariants } from "@/lib/sample_data";
 import type { ChannelVariant, Campaign } from "@/types/content_package";
 import { useTeam } from "@/contexts/team-context";
@@ -175,11 +176,19 @@ function DotPopover({ info, onClose }: { info: DotInfo; onClose: () => void }) {
             <span>{v.assignee}</span>
           </div>
         )}
-        <div className="border-t border-slate-100 pt-2 mt-1">
+        <div className="border-t border-slate-100 pt-2 mt-1 flex items-center justify-between">
           <p className="text-[10px] text-slate-400 flex items-center gap-1">
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
             ドラッグで日程を変更できます
           </p>
+          <Link
+            href={`/contents/detail/${v.content_id}`}
+            className="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-0.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            詳細を見る
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          </Link>
         </div>
       </div>
     </div>
@@ -870,7 +879,14 @@ export default function CampaignsPage() {
                                             </div>
                                             <span className={`${chColor} text-white text-[10px] font-semibold px-2 py-0.5 rounded shrink-0`}>{CHANNEL_LABEL[v.channel] ?? v.channel}</span>
                                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${vs.cls}`}>{vs.label}</span>
-                                            <span className="text-xs text-slate-600 truncate">{getVariantSummary(v) || "(内容なし)"}</span>
+                                            <Link
+                                              href={`/contents/detail/${v.content_id}`}
+                                              className="text-xs text-slate-600 truncate hover:text-indigo-600 hover:underline transition-colors"
+                                              onClick={(e) => e.stopPropagation()}
+                                              title="コンテンツ詳細を表示"
+                                            >
+                                              {getVariantSummary(v) || "(内容なし)"}
+                                            </Link>
                                           </div>
                                           <div className="flex items-center gap-1.5 shrink-0">
                                             {/* Assignee avatar - click to open dropdown */}
