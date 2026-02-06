@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { KnowledgeCategory } from "@/types/content_package";
 import { isGeminiAvailable, generateJSON } from "@/lib/gemini";
+import { systemPromptStore } from "@/lib/store";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,10 +97,12 @@ async function extractWithGemini(
   files: MinutesFile[],
   folderName: string
 ): Promise<ExtractResult> {
+  const spConfig = systemPromptStore.getByKey("knowledge_extract");
   const prompt = buildExtractPrompt(files, folderName);
   const result = await generateJSON<ExtractResult>(prompt, {
-    temperature: 0.5,
-    maxOutputTokens: 8192,
+    model: spConfig?.model,
+    temperature: spConfig?.temperature ?? 0.5,
+    maxOutputTokens: spConfig?.maxOutputTokens ?? 8192,
   });
 
   // Validate and clean

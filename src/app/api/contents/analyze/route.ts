@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isGeminiAvailable, generateJSON } from "@/lib/gemini";
+import { systemPromptStore } from "@/lib/store";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -223,10 +224,12 @@ export async function POST(request: Request) {
     if (isGeminiAvailable) {
       try {
         console.log("[analyze] Gemini API を使用して素材分析を実行...");
+        const spConfig = systemPromptStore.getByKey("content_analyze");
         const prompt = buildAnalysisPrompt(fileInfos, folderName || "", validFileContents);
         const raw = await generateJSON<AnalysisResult>(prompt, {
-          temperature: 0.3,
-          maxOutputTokens: 2048,
+          model: spConfig?.model,
+          temperature: spConfig?.temperature ?? 0.3,
+          maxOutputTokens: spConfig?.maxOutputTokens ?? 2048,
         });
         const result = stripMarkdownFromAnalysis(raw);
         console.log("[analyze] Gemini API 成功");

@@ -26,6 +26,13 @@ import {
   sampleKnowledgeComments,
 } from "./sample_data";
 
+import {
+  CONTENT_ANALYZE_PROMPT,
+  CONTENT_GENERATE_PROMPT,
+  KNOWLEDGE_PROOFREAD_PROMPT,
+  KNOWLEDGE_EXTRACT_PROMPT,
+} from "./system_prompt_defaults";
+
 export interface PromptVersion {
   id: string;
   name: string;
@@ -35,6 +42,20 @@ export interface PromptVersion {
   changelog: string;
   created_at: string;
   created_by: string;
+}
+
+export interface SystemPromptConfig {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  category: "contents" | "knowledge";
+  prompt: string;
+  model: string;
+  temperature: number;
+  maxOutputTokens: number;
+  updated_at: string;
+  updated_by: string;
 }
 
 export interface AuditLog {
@@ -107,6 +128,60 @@ const promptVersions: PromptVersion[] = [
     changelog: "初版",
     created_at: "2026-02-01T09:00:00Z",
     created_by: "admin",
+  },
+];
+const systemPromptConfigs: SystemPromptConfig[] = [
+  {
+    id: "sp_001",
+    key: "content_analyze",
+    name: "素材分析",
+    description: "アップロードされた素材ファイルを分析し、コンテンツ生成の方向性を判断するプロンプト",
+    category: "contents",
+    prompt: CONTENT_ANALYZE_PROMPT,
+    model: "gemini-2.5-flash",
+    temperature: 0.3,
+    maxOutputTokens: 2048,
+    updated_at: "2026-02-06T00:00:00Z",
+    updated_by: "system",
+  },
+  {
+    id: "sp_002",
+    key: "content_generate",
+    name: "コンテンツ生成",
+    description: "チャネル向けコンテンツを生成するプロンプト（チャネル別出力フォーマットは自動付与）",
+    category: "contents",
+    prompt: CONTENT_GENERATE_PROMPT,
+    model: "gemini-2.5-flash",
+    temperature: 0.7,
+    maxOutputTokens: 4096,
+    updated_at: "2026-02-06T00:00:00Z",
+    updated_by: "system",
+  },
+  {
+    id: "sp_003",
+    key: "knowledge_proofread",
+    name: "ナレッジ発展",
+    description: "短いメモや気づきを、チーム全体で活用できる実践的なナレッジに発展させるプロンプト",
+    category: "knowledge",
+    prompt: KNOWLEDGE_PROOFREAD_PROMPT,
+    model: "gemini-2.5-flash",
+    temperature: 0.7,
+    maxOutputTokens: 4096,
+    updated_at: "2026-02-06T00:00:00Z",
+    updated_by: "system",
+  },
+  {
+    id: "sp_004",
+    key: "knowledge_extract",
+    name: "ナレッジ抽出",
+    description: "議事録・トランスクリプトから、チームに共有すべきナレッジを複数抽出するプロンプト",
+    category: "knowledge",
+    prompt: KNOWLEDGE_EXTRACT_PROMPT,
+    model: "gemini-2.5-flash",
+    temperature: 0.5,
+    maxOutputTokens: 8192,
+    updated_at: "2026-02-06T00:00:00Z",
+    updated_by: "system",
   },
 ];
 const auditLogs: AuditLog[] = [];
@@ -229,6 +304,23 @@ export const promptVersionStore = {
     promptVersions.push(p);
     addAudit("create", "prompt_version", p.id, p.created_by, `${p.type} v${p.version}`);
     return p;
+  },
+};
+
+// --- System Prompt Configs ---
+export const systemPromptStore = {
+  list: () => systemPromptConfigs,
+  getByKey: (key: string) => systemPromptConfigs.find((c) => c.key === key),
+  update: (key: string, patch: Partial<Omit<SystemPromptConfig, "id" | "key">>) => {
+    const idx = systemPromptConfigs.findIndex((c) => c.key === key);
+    if (idx === -1) return null;
+    systemPromptConfigs[idx] = {
+      ...systemPromptConfigs[idx],
+      ...patch,
+      updated_at: new Date().toISOString(),
+    };
+    addAudit("update", "system_prompt", systemPromptConfigs[idx].id, patch.updated_by || "system", `Updated ${key}`);
+    return systemPromptConfigs[idx];
   },
 };
 
