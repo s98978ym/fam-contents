@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { contentStore, variantStore } from "@/lib/store";
+import { contentStore, variantStore, systemPromptStore } from "@/lib/store";
 import type { Channel } from "@/types/content_package";
 import { isGeminiAvailable, generateJSON } from "@/lib/gemini";
 
@@ -213,10 +213,12 @@ async function generateWithGemini(
   channel: Channel,
   ctx: GenerationContext
 ): Promise<Record<string, unknown>> {
+  const spConfig = systemPromptStore.getByKey("content_generate");
   const prompt = buildChannelPrompt(channel, ctx);
   return await generateJSON<Record<string, unknown>>(prompt, {
-    temperature: 0.7,
-    maxOutputTokens: 4096,
+    model: spConfig?.model,
+    temperature: spConfig?.temperature ?? 0.7,
+    maxOutputTokens: spConfig?.maxOutputTokens ?? 4096,
   });
 }
 

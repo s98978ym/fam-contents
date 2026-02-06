@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { KnowledgeCategory } from "@/types/content_package";
 import { isGeminiAvailable, generateJSON } from "@/lib/gemini";
+import { systemPromptStore } from "@/lib/store";
 
 // ---------------------------------------------------------------------------
 // Gemini AI ナレッジ発展
@@ -165,10 +166,12 @@ async function proofreadWithGemini(
   title: string,
   length: OutputLength = "short"
 ): Promise<ProofreadResult> {
+  const spConfig = systemPromptStore.getByKey("knowledge_proofread");
   const prompt = buildProofreadPrompt(text, title, length);
   const result = await generateJSON<ProofreadResult>(prompt, {
-    temperature: 0.7,
-    maxOutputTokens: 4096,
+    model: spConfig?.model,
+    temperature: spConfig?.temperature ?? 0.7,
+    maxOutputTokens: spConfig?.maxOutputTokens ?? 4096,
   });
 
   // Markdown記号を強制除去（セーフティネット）

@@ -8,7 +8,7 @@ const apiKey = process.env.GEMINI_API_KEY ?? "";
 export const isGeminiAvailable = apiKey.length > 0;
 
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
-const DEFAULT_MODEL = "gemini-2.0-flash";
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 // ---------------------------------------------------------------------------
 // Gemini REST API 呼び出し

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Channel } from "@/types/content_package";
 import { isGeminiAvailable, generateJSON } from "@/lib/gemini";
+import { systemPromptStore } from "@/lib/store";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -298,11 +299,13 @@ export async function POST(request: Request) {
     if (isGeminiAvailable) {
       try {
         console.log(`[generate] Gemini API でチャネル ${channel} のコンテンツを生成...`);
+        const spConfig = systemPromptStore.getByKey("content_generate");
         const prompt = buildChannelPrompt(ctx);
         console.log(`[generate] Prompt preview (first 500 chars):`, prompt.slice(0, 500));
         content = await generateJSON<Record<string, unknown>>(prompt, {
-          temperature: 0.7,
-          maxOutputTokens: 4096,
+          model: spConfig?.model,
+          temperature: spConfig?.temperature ?? 0.7,
+          maxOutputTokens: spConfig?.maxOutputTokens ?? 4096,
         });
         console.log(`[generate] Gemini raw response:`, JSON.stringify(content, null, 2).slice(0, 1000));
         source = "gemini";
