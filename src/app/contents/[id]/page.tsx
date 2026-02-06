@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useGoogleAuth } from "@/lib/use_google_auth";
 import {
@@ -239,6 +239,12 @@ export default function FolderDetailPage() {
   const [newFileName, setNewFileName] = useState("");
   const [newFileCategory, setNewFileCategory] = useState<DriveFile["category"]>("other");
 
+  // Local file upload
+  const [fileContents, setFileContents] = useState<{ name: string; content: string }[]>([]);
+  const [isLocalUpload, setIsLocalUpload] = useState(false);
+  const [localDragOver, setLocalDragOver] = useState(false);
+  const localFileInputRef = useRef<HTMLInputElement>(null);
+
   // Wizard
   const [wizardFiles, setWizardFiles] = useState<FileEntry[]>([]);
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -271,6 +277,14 @@ export default function FolderDetailPage() {
           const files = parsed.files || [];
           setDriveFiles(files);
           setWizardFiles(driveToWizardFiles(files));
+          // Load file contents if available (local upload)
+          if (parsed.fileContents && Array.isArray(parsed.fileContents)) {
+            setFileContents(parsed.fileContents);
+          }
+          // Mark as local upload if folder ID starts with "local_"
+          if (folderId.startsWith("local_")) {
+            setIsLocalUpload(true);
+          }
           // Fetch prompt versions
           fetch("/api/prompt-versions").then((r) => r.json()).then(setPromptVersions);
           setLoading(false);
@@ -327,6 +341,7 @@ export default function FolderDetailPage() {
         body: JSON.stringify({
           files: driveFiles.map((f) => ({ name: f.name, category: f.category })),
           folderName: folder?.name || "",
+          fileContents: fileContents.length > 0 ? fileContents : undefined,
         }),
       });
       if (res.ok) {
@@ -340,7 +355,7 @@ export default function FolderDetailPage() {
     } finally {
       setAnalyzing(false);
     }
-  }, [driveFiles, folder]);
+  }, [driveFiles, folder, fileContents]);
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
@@ -354,6 +369,7 @@ export default function FolderDetailPage() {
           title: folder?.name || "コンテンツ",
           summary: aiAnalysis?.direction || folder?.name || "",
           files: driveFiles.map((f) => ({ name: f.name, category: f.category })),
+          fileContents: fileContents.length > 0 ? fileContents : undefined,
           analysisDirection: aiAnalysis?.direction,
           taste: settings.taste,
           customInstructions: settings.customInstructions,
@@ -389,7 +405,7 @@ export default function FolderDetailPage() {
     } finally {
       setGenerating(false);
     }
-  }, [settings, wizardFiles, aiAnalysis, driveFiles, folder]);
+  }, [settings, wizardFiles, aiAnalysis, driveFiles, folder, fileContents]);
 
   const handleUpdateContent = useCallback((key: string, value: string) => {
     setPreview((prev) => {
@@ -442,6 +458,75 @@ export default function FolderDetailPage() {
     }
   }
 
+  // Local file upload helpers
+  function categorizeLocalFileByName(name: string, mimeType: string): DriveFile["category"] {
+    const lower = name.toLowerCase();
+    if (lower.includes("議事録") || lower.includes("mtg") || lower.includes("meeting") || lower.includes("minutes")) return "minutes";
+    if (lower.includes("transcript") || lower.includes("文字起こし") || lower.includes("書き起こし")) return "transcript";
+    if (mimeType.startsWith("image/")) return "photo";
+    if (mimeType === "application/pdf" || mimeType.includes("document") || mimeType.includes("wordprocessing")) return "minutes";
+    return "other";
+  }
+
+  function isTextFile(file: File): boolean {
+    const textMimes = ["text/", "application/json", "application/xml", "application/javascript"];
+    const textExts = [".txt", ".md", ".csv", ".tsv", ".json", ".xml", ".html", ".doc", ".docx"];
+    if (textMimes.some((m) => file.type.startsWith(m))) return true;
+    if (textExts.some((ext) => file.name.toLowerCase().endsWith(ext))) return true;
+    return false;
+  }
+
+  async function handleLocalFileUpload(files: FileList | File[]) {
+    const fileArray = Array.from(files);
+    const newDriveFiles: DriveFile[] = [];
+    const newContents: { name: string; content: string }[] = [];
+
+    for (const f of fileArray) {
+      const category = categorizeLocalFileByName(f.name, f.type);
+      const driveFile: DriveFile = {
+        id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        folderId,
+        name: f.name,
+        mimeType: f.type || "application/octet-stream",
+        category,
+        url: "",
+        createdAt: new Date().toISOString(),
+      };
+      newDriveFiles.push(driveFile);
+
+      // Read text file contents
+      if (isTextFile(f)) {
+        try {
+          const content = await f.text();
+          newContents.push({ name: f.name, content });
+        } catch {
+          // Skip files that can't be read
+        }
+      }
+    }
+
+    setDriveFiles((prev) => [...prev, ...newDriveFiles]);
+    setWizardFiles((prev) => [...prev, ...driveToWizardFiles(newDriveFiles)]);
+    if (newContents.length > 0) {
+      setFileContents((prev) => [...prev, ...newContents]);
+    }
+  }
+
+  function handleLocalDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setLocalDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      handleLocalFileUpload(e.dataTransfer.files);
+    }
+  }
+
+  function handleLocalFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files && e.target.files.length > 0) {
+      handleLocalFileUpload(e.target.files);
+    }
+    if (localFileInputRef.current) localFileInputRef.current.value = "";
+  }
+
   const canProceed = (s: number) => {
     if (s === 1) return driveFiles.length > 0;
     if (s === 2) return !!settings.channel;
@@ -451,7 +536,7 @@ export default function FolderDetailPage() {
 
   if (loading) return <div className="text-center py-16 text-gray-400">読み込み中...</div>;
 
-  if (needsAuth) {
+  if (needsAuth && !isLocalUpload) {
     return (
       <div className="text-center py-16">
         <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center">
@@ -514,13 +599,56 @@ export default function FolderDetailPage() {
           {/* ----------------------------------------------------------- */}
           {step === 1 && (
             <div>
-              <h3 className="font-bold text-lg text-gray-800">フォルダ内のファイル</h3>
-              <p className="text-sm text-gray-500 mt-1 mb-4">Google Driveから読み込まれたファイルです。内容を確認して「AIで分析する」を押してください。</p>
+              <h3 className="font-bold text-lg text-gray-800">
+                {isLocalUpload ? "アップロードされたファイル" : "フォルダ内のファイル"}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1 mb-4">
+                {isLocalUpload
+                  ? "ローカルからアップロードされたファイルです。内容を確認して「AIで分析する」を押してください。"
+                  : "Google Driveから読み込まれたファイルです。内容を確認して「AIで分析する」を押してください。"}
+              </p>
+
+              {/* Local file upload area */}
+              {isLocalUpload && (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setLocalDragOver(true); }}
+                  onDragLeave={() => setLocalDragOver(false)}
+                  onDrop={handleLocalDrop}
+                  onClick={() => localFileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-lg p-6 text-center mb-4 transition-colors cursor-pointer ${
+                    localDragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-gray-50 hover:border-gray-400"
+                  }`}
+                >
+                  <div className="text-2xl mb-2">📁</div>
+                  <p className="text-sm text-gray-600 font-medium">ファイルを追加（ドラッグ＆ドロップ or クリック）</p>
+                  <p className="text-xs text-gray-400 mt-1">議事録・台本・写真などの素材ファイル</p>
+                  <input
+                    ref={localFileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleLocalFileSelect}
+                    className="hidden"
+                    accept=".txt,.md,.doc,.docx,.pdf,.csv,.json,.xml,.html,.jpg,.jpeg,.png,.gif,.webp,.svg,.mp4,.mp3,.wav"
+                  />
+                </div>
+              )}
+
+              {/* File content indicator */}
+              {fileContents.length > 0 && (
+                <div className="flex items-center gap-2 text-xs mb-4 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <span className="text-blue-600 font-medium">テキスト読み取り済み: {fileContents.length}件</span>
+                  <span className="text-blue-500">（AI分析・生成時にファイル内容を活用します）</span>
+                </div>
+              )}
 
               {driveFiles.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 text-sm">
                   ファイルがありません。
-                  <button onClick={() => setShowAddFile(true)} className="text-blue-600 hover:underline ml-1">ファイルを追加</button>
+                  {isLocalUpload ? (
+                    <button onClick={() => localFileInputRef.current?.click()} className="text-blue-600 hover:underline ml-1">ファイルをアップロード</button>
+                  ) : (
+                    <button onClick={() => setShowAddFile(true)} className="text-blue-600 hover:underline ml-1">ファイルを追加</button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -628,7 +756,7 @@ export default function FolderDetailPage() {
                 </div>
               )}
 
-              {!showAddFile && driveFiles.length > 0 && (
+              {!showAddFile && driveFiles.length > 0 && !isLocalUpload && (
                 <button onClick={() => setShowAddFile(true)} className="text-xs text-blue-600 hover:underline mt-3">
                   + ファイルを追加
                 </button>

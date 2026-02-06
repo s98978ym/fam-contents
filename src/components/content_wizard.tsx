@@ -228,6 +228,18 @@ function mapDriveCategoryToType(category: string): FileEntry["type"] {
   }
 }
 
+// Local file categorization helper
+function categorizeLocalFileType(name: string, mimeType: string): FileEntry["type"] {
+  const lower = name.toLowerCase();
+  if (lower.includes("議事録") || lower.includes("mtg") || lower.includes("meeting") || lower.includes("minutes")) return "minutes";
+  if (lower.includes("transcript") || lower.includes("文字起こし") || lower.includes("書き起こし")) return "minutes";
+  if (lower.includes("台本") || lower.includes("script") || lower.includes("原稿")) return "script";
+  if (lower.includes("企画") || lower.includes("plan") || lower.includes("proposal")) return "plan";
+  if (mimeType.startsWith("image/")) return "photo";
+  if (mimeType === "application/pdf" || mimeType.includes("document") || mimeType.includes("wordprocessing")) return "minutes";
+  return "other";
+}
+
 export function StepFiles({
   folder,
   setFolder,
@@ -473,12 +485,51 @@ export function StepFiles({
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => { e.preventDefault(); setDragOver(false); }}
-          className={`border-2 border-dashed rounded-lg p-6 text-center mb-4 transition-colors ${dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-gray-50"}`}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const dropped = Array.from(e.dataTransfer.files);
+            if (dropped.length > 0) {
+              const newEntries: FileEntry[] = dropped.map((f) => ({
+                id: `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                name: f.name,
+                type: categorizeLocalFileType(f.name, f.type),
+                driveUrl: "",
+                addedAt: new Date().toISOString(),
+                selected: true,
+                isEyecatch: false,
+              }));
+              setFiles([...files, ...newEntries]);
+            }
+          }}
+          className={`border-2 border-dashed rounded-lg p-6 text-center mb-4 transition-colors cursor-pointer ${dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-gray-50 hover:border-gray-400"}`}
+          onClick={() => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.multiple = true;
+            input.accept = ".txt,.md,.doc,.docx,.pdf,.csv,.json,.xml,.html,.jpg,.jpeg,.png,.gif,.webp,.svg,.mp4,.mp3,.wav";
+            input.onchange = (e) => {
+              const fileInput = e.target as HTMLInputElement;
+              if (fileInput.files) {
+                const selected = Array.from(fileInput.files);
+                const newEntries: FileEntry[] = selected.map((f) => ({
+                  id: `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                  name: f.name,
+                  type: categorizeLocalFileType(f.name, f.type),
+                  driveUrl: "",
+                  addedAt: new Date().toISOString(),
+                  selected: true,
+                  isEyecatch: false,
+                }));
+                setFiles([...files, ...newEntries]);
+              }
+            };
+            input.click();
+          }}
         >
           <div className="text-3xl mb-2">📁</div>
           <p className="text-sm text-gray-600 font-medium">ファイルをドラッグ＆ドロップ</p>
-          <p className="text-xs text-gray-400 mt-1">または下のフォームから手動で追加</p>
+          <p className="text-xs text-gray-400 mt-1">またはクリックしてファイルを選択、もしくは下のフォームから手動で追加</p>
         </div>
 
         {/* Manual add form */}

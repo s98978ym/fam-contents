@@ -11,6 +11,7 @@ interface GenerationContext {
   summary: string;
   channel: Channel;
   files?: { name: string; category: string }[];
+  fileContents?: { name: string; content: string }[];
   analysisDirection?: string;
   taste?: string;
   customInstructions?: string;
@@ -38,6 +39,19 @@ ${ctx.files.map((f) => `- ${f.name}（${f.category}）`).join("\n")}
 ファイル名から推測できるテーマ・内容を最大限活用する。
 
 `;
+  }
+
+  if (ctx.fileContents && ctx.fileContents.length > 0) {
+    base += `## アップロードされたファイルの内容
+
+以下のファイル内容に基づいて、正確で具体的なコンテンツを生成すること。ファイル名の推測ではなく、実際の内容を活用すること。
+
+`;
+    for (const fc of ctx.fileContents) {
+      // 長すぎるファイルは先頭3000文字に制限
+      const truncated = fc.content.length > 3000 ? fc.content.slice(0, 3000) + "\n...（以下省略）" : fc.content;
+      base += `### ${fc.name}\n\`\`\`\n${truncated}\n\`\`\`\n\n`;
+    }
   }
 
   if (ctx.analysisDirection) {
@@ -256,11 +270,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "channel and title are required" }, { status: 400 });
     }
 
+    // Validate fileContents if provided
+    const validFileContents: { name: string; content: string }[] | undefined =
+      Array.isArray(body.fileContents) && body.fileContents.length > 0
+        ? body.fileContents.filter((fc: { name?: string; content?: string }) => fc.name && fc.content)
+        : undefined;
+
+    if (validFileContents) {
+      console.log(`[generate] ファイル内容 ${validFileContents.length}件を含むリクエスト`);
+    }
+
     const ctx: GenerationContext = {
       title,
       summary: summary || title,
       channel,
       files: body.files,
+      fileContents: validFileContents,
       analysisDirection: body.analysisDirection,
       taste: body.taste,
       customInstructions: body.customInstructions,
