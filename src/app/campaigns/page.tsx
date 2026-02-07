@@ -4,6 +4,8 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { sampleCampaigns, sampleVariants } from "@/lib/sample_data";
 import type { ChannelVariant, Campaign } from "@/types/content_package";
+import { AttachmentUploader, AttachmentList } from "@/components/attachment_manager";
+import type { Attachment } from "@/types/content_package";
 import { useTeam } from "@/contexts/team-context";
 
 // ---------------------------------------------------------------------------
@@ -220,6 +222,7 @@ function NewCampaignForm({ onSave, onCancel }: { onSave: (data: Omit<Campaign, "
   const [startDate, setStartDate] = useState(fmtISO(new Date()));
   const [endDate, setEndDate] = useState(fmtISO(addDays(new Date(), 30)));
   const [status, setStatus] = useState<Campaign["status"]>("planning");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   return (
     <div className="bg-white rounded-xl border border-indigo-200 shadow-sm mb-4 p-4">
@@ -249,9 +252,12 @@ function NewCampaignForm({ onSave, onCancel }: { onSave: (data: Omit<Campaign, "
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs outline-none" />
         </div>
       </div>
+      <div className="mb-3">
+        <AttachmentUploader attachments={attachments} onChange={setAttachments} compact />
+      </div>
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel} className="px-3 py-1.5 rounded-md text-xs border border-slate-200 hover:bg-slate-50">キャンセル</button>
-        <button onClick={() => { if (!name.trim()) return; onSave({ name: name.trim(), objective, start_date: startDate, end_date: endDate, status, content_ids: [] }); }} disabled={!name.trim()} className={`px-3 py-1.5 rounded-md text-xs font-medium ${name.trim() ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-slate-100 text-slate-400"}`}>
+        <button onClick={() => { if (!name.trim()) return; onSave({ name: name.trim(), objective, start_date: startDate, end_date: endDate, status, content_ids: [], attachments }); }} disabled={!name.trim()} className={`px-3 py-1.5 rounded-md text-xs font-medium ${name.trim() ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-slate-100 text-slate-400"}`}>
           追加
         </button>
       </div>
@@ -937,6 +943,22 @@ export default function CampaignsPage() {
                                 linkedContentIds={camp.content_ids}
                                 onLink={(contentId) => linkVariant(camp.id, contentId)}
                               />
+                              {/* 参考資料 */}
+                              <div className="mt-3 pt-3 border-t border-slate-100">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">参考資料</span>
+                                </div>
+                                {camp.attachments && camp.attachments.length > 0 && (
+                                  <div className="mb-2">
+                                    <AttachmentList attachments={camp.attachments} compact />
+                                  </div>
+                                )}
+                                <AttachmentUploader
+                                  attachments={camp.attachments || []}
+                                  onChange={(newAtts) => updateCampaign(camp.id, { attachments: newAtts })}
+                                  compact
+                                />
+                              </div>
                             </div>
                           </div>
                         )}

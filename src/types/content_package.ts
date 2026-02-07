@@ -67,6 +67,8 @@ export interface ContentPackage {
   review_requested_to?: string;
   /** レビュー依頼日時 */
   review_requested_at?: string;
+  /** 参考資料 */
+  attachments?: Attachment[];
 }
 
 export interface ChannelVariant {
@@ -88,6 +90,8 @@ export interface Campaign {
   end_date: string;
   status: "planning" | "active" | "completed";
   content_ids: string[];
+  /** 参考資料 */
+  attachments?: Attachment[];
 }
 
 export interface ReviewRecord {
@@ -134,6 +138,19 @@ export interface DesignManifest {
 }
 
 // ---------------------------------------------------------------------------
+// Attachment (参考資料)
+// ---------------------------------------------------------------------------
+
+export interface Attachment {
+  id: string;
+  name: string;
+  url: string;
+  mimeType?: string;
+  size?: number;
+  added_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Knowledge Sharing (ナレッジ共有)
 // ---------------------------------------------------------------------------
 
@@ -162,6 +179,8 @@ export interface KnowledgePost {
   archived: boolean;         // アーカイブ済みか
   archived_by?: string;      // アーカイブした人
   archived_at?: string;      // アーカイブ日時
+  /** 参考資料 */
+  attachments?: Attachment[];
   created_at: string;
   updated_at: string;
 }
