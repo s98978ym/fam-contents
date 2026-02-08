@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     images: body.images || [],
     tags: body.tags || [],
     category: body.category || "other",
+    attachments: body.attachments || [],
   });
 
   return NextResponse.json(post, { status: 201 });

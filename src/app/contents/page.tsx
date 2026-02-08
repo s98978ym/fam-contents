@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useGoogleAuth } from "@/lib/use_google_auth";
 import { useGooglePicker, type PickedFolder } from "@/lib/use_google_picker";
+import { AttachmentUploader } from "@/components/attachment_manager";
+import type { Attachment } from "@/types/content_package";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,6 +80,9 @@ export default function ContentsPage() {
   const [localDragOver, setLocalDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Attachments (参考資料)
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
   // Handle folder selection from Picker
   const handleOpenPicker = useCallback(() => {
     googlePicker.openPicker(
@@ -132,10 +137,11 @@ export default function ContentsPage() {
         id: selectedFolder.id,
         name: selectedFolder.name,
         files: driveFiles,
+        attachments: attachments.map(a => ({ id: a.id, name: a.name, url: a.url, mimeType: a.mimeType, size: a.size, added_at: a.added_at })),
       }));
       router.push(`/contents/${selectedFolder.id}`);
     }
-  }, [selectedFolder, driveFiles, router]);
+  }, [selectedFolder, driveFiles, attachments, router]);
 
   // Local file handlers
   const handleLocalFileDrop = useCallback((e: React.DragEvent) => {
@@ -189,9 +195,10 @@ export default function ContentsPage() {
       name: "ローカルアップロード",
       files: localFileEntries,
       fileContents,
+      attachments: attachments.map(a => ({ id: a.id, name: a.name, url: a.url, mimeType: a.mimeType, size: a.size, added_at: a.added_at })),
     }));
     router.push(`/contents/${id}`);
-  }, [localFiles, localFileEntries, router]);
+  }, [localFiles, localFileEntries, attachments, router]);
 
   // Category helpers
   const categorizeFiles = (files: DriveFile[]) => ({
@@ -337,6 +344,9 @@ export default function ContentsPage() {
                 >
                   + ファイルを追加
                 </button>
+
+                {/* 参考資料 */}
+                <AttachmentUploader attachments={attachments} onChange={setAttachments} />
 
                 {/* Proceed button */}
                 <button
@@ -551,6 +561,9 @@ export default function ContentsPage() {
                                 ))}
                               </ul>
                             </div>
+
+                            {/* 参考資料 */}
+                            <AttachmentUploader attachments={attachments} onChange={setAttachments} />
 
                             {/* Proceed button */}
                             <button
