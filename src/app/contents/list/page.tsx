@@ -3,6 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useTeam } from "@/contexts/team-context";
+import { useCurrentUser } from "@/lib/user_context";
+import { AttachmentUploader } from "@/components/attachment_manager";
+import type { Attachment } from "@/types/content_package";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -242,6 +245,7 @@ function AssigneeCombobox({ value, members, onChange, onRemoveMember }: {
 // ---------------------------------------------------------------------------
 
 export default function ContentsListPage() {
+  const { currentUser } = useCurrentUser();
   const [variants, setVariants] = useState<Variant[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,6 +256,8 @@ export default function ContentsListPage() {
   const [trashedItems, setTrashedItems] = useState<TrashedItem[]>([]);
   const [toast, setToast] = useState("");
   const [registeredMembers, setRegisteredMembers] = useState<string[]>([]);
+  const [variantAttachments, setVariantAttachments] = useState<Record<string, Attachment[]>>({});
+  const [expandedAttach, setExpandedAttach] = useState<string | null>(null);
 
   // Hydrate from localStorage after mount
   useEffect(() => {
@@ -260,6 +266,17 @@ export default function ContentsListPage() {
     saveTrashed(items);
     setTrashedItems(items);
     setRegisteredMembers(loadMembers());
+    try {
+      setVariantAttachments(JSON.parse(localStorage.getItem("variant_attachments") ?? "{}"));
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleVariantAttach = useCallback((variantId: string, atts: Attachment[]) => {
+    setVariantAttachments((prev) => {
+      const next = { ...prev, [variantId]: atts };
+      localStorage.setItem("variant_attachments", JSON.stringify(next));
+      return next;
+    });
   }, []);
 
   const trashedIds = new Set(trashedItems.map((t) => t.variantId));
@@ -669,6 +686,29 @@ export default function ContentsListPage() {
                     )}
                   </div>
                 </div>
+                {/* Attachments section */}
+                {viewMode !== "trash" && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    {(variantAttachments[v.id]?.length ?? 0) > 0 || expandedAttach === v.id ? (
+                      <AttachmentUploader
+                        attachments={variantAttachments[v.id] || []}
+                        onChange={(atts) => handleVariantAttach(v.id, atts)}
+                        compact
+                        currentUser={currentUser}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => setExpandedAttach(v.id)}
+                        className="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        参考資料を追加
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

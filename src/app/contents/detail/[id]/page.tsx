@@ -14,6 +14,7 @@ interface AttachmentItem {
   url: string;
   mimeType?: string;
   size?: number;
+  added_by?: string;
   added_at: string;
 }
 
@@ -324,6 +325,8 @@ export default function ContentDetailPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                 </svg>
                 <span className="text-sm text-gray-700 group-hover:text-indigo-600 truncate transition-colors">{att.name}</span>
+                {att.added_by && <span className="text-xs text-gray-400 shrink-0">{att.added_by}</span>}
+                {att.added_at && <span className="text-xs text-gray-400 shrink-0">{att.added_at.slice(0, 16).replace("T", " ")}</span>}
                 <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-indigo-500 shrink-0 ml-auto transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
