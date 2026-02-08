@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import * as XLSX from "xlsx";
 import type { Attachment } from "@/types/content_package";
 
 // ---------------------------------------------------------------------------
@@ -77,7 +78,17 @@ const VIEWER_STYLE = `*{margin:0;box-sizing:border-box}body{font-family:-apple-s
 .fallback .fname{font-size:18px;font-weight:600;color:#475569;margin-bottom:8px}
 .fallback .hint{font-size:13px;margin-bottom:20px}
 .fallback .btn{display:inline-block;padding:10px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:500}
-.fallback .btn:hover{background:#4f46e5}`;
+.fallback .btn:hover{background:#4f46e5}
+.sheet-tabs{display:flex;gap:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 20px;overflow-x:auto}
+.sheet-tabs button{padding:8px 16px;font-size:12px;font-weight:500;border:none;background:transparent;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.sheet-tabs button.active{color:#4f46e5;border-bottom-color:#4f46e5;background:#f5f3ff}
+.sheet-tabs button:hover{background:#f1f5f9}
+.sheet-wrap{overflow:auto;max-height:calc(100vh - 101px);padding:16px}
+.sheet-wrap table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.sheet-wrap th,.sheet-wrap td{border:1px solid #e2e8f0;padding:6px 10px;font-size:12px;text-align:left;white-space:nowrap;max-width:300px;overflow:hidden;text-overflow:ellipsis}
+.sheet-wrap th{background:#f8fafc;font-weight:600;color:#475569;position:sticky;top:0;z-index:1}
+.sheet-wrap td{color:#334155}
+.sheet-wrap tr:hover td{background:#f8fafc}`;
 
 function buildBar(name: string, url: string, meta?: string): string {
   return `<div class="bar"><span class="name">${esc(name)}</span>${meta ? `<span class="meta">${esc(meta)}</span>` : ""}<a class="dl" href="${esc(url)}" download="${esc(name)}">ダウンロード</a></div>`;
@@ -132,6 +143,55 @@ export function openPreview(att: Attachment): void {
         const w = window.open("", "_blank");
         if (!w) return;
         w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}</style></head><body>${buildBar(att.name, att.url, meta)}<div class="content light"><pre>${esc(text)}</pre></div></body></html>`);
+        w.document.close();
+      });
+    return;
+  }
+
+  // Spreadsheet files (Excel, CSV, etc.) — parse with SheetJS
+  const isSpreadsheet =
+    mime.includes("spreadsheet") || mime.includes("excel") || mime === "application/vnd.ms-excel" ||
+    mime === "text/csv" || /\.(xlsx?|csv|ods)$/i.test(att.name);
+  if (isSpreadsheet) {
+    fetch(att.url)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => {
+        const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
+        const sheetNames = wb.SheetNames;
+        const sheetsHtml: Record<string, string> = {};
+        for (const name of sheetNames) {
+          sheetsHtml[name] = XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false });
+        }
+        const w = window.open("", "_blank");
+        if (!w) return;
+        // Build tab buttons
+        const tabs = sheetNames.map((n, i) => `<button class="${i === 0 ? "active" : ""}" onclick="switchSheet('${esc(n).replace(/'/g, "\\'")}',this)">${esc(n)}</button>`).join("");
+        // Build sheet content divs
+        const sheets = sheetNames.map((n, i) => `<div id="sheet-${i}" class="sheet-wrap" style="${i > 0 ? "display:none" : ""}">${sheetsHtml[n]}</div>`).join("");
+        w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}</style></head><body>
+${buildBar(att.name, att.url, meta)}
+${sheetNames.length > 1 ? `<div class="sheet-tabs">${tabs}</div>` : ""}
+${sheets}
+<script>
+function switchSheet(name, btn) {
+  var divs = document.querySelectorAll('.sheet-wrap');
+  divs.forEach(function(d) { d.style.display = 'none'; });
+  var buttons = document.querySelectorAll('.sheet-tabs button');
+  buttons.forEach(function(b) { b.className = ''; });
+  btn.className = 'active';
+  var idx = ${JSON.stringify(sheetNames)}.indexOf(name);
+  if (idx >= 0) document.getElementById('sheet-' + idx).style.display = 'block';
+}
+</script>
+</body></html>`);
+        w.document.close();
+      })
+      .catch(() => {
+        // If parsing fails, fall back to download
+        const fi2 = getFileIcon(mime);
+        const w = window.open("", "_blank");
+        if (!w) return;
+        w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}</style></head><body>${buildBar(att.name, att.url, meta)}<div class="content light"><div class="fallback"><div class="icon">${fi2.icon === "XLS" ? "📊" : "📎"}</div><div class="fname">${esc(att.name)}</div><div class="hint">ファイルの読み込みに失敗しました</div><a class="btn" href="${esc(att.url)}" download="${esc(att.name)}">ダウンロードして開く</a></div></div></body></html>`);
         w.document.close();
       });
     return;
