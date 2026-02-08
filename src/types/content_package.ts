@@ -147,6 +147,7 @@ export interface Attachment {
   url: string;
   mimeType?: string;
   size?: number;
+  added_by?: string;
   added_at: string;
 }
 

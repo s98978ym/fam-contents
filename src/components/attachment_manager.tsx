@@ -19,6 +19,16 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  if (diffMs < 60_000) return "たった今";
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}分前`;
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}時間前`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 const MIME_ICON: Record<string, { icon: string; color: string }> = {
   "application/pdf": { icon: "PDF", color: "bg-red-100 text-red-600" },
   "image/": { icon: "IMG", color: "bg-blue-100 text-blue-600" },
@@ -45,7 +55,7 @@ function isUrlString(s: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// AttachmentList (read-only display)
+// AttachmentList (read-only display with added_by/timestamp)
 // ---------------------------------------------------------------------------
 
 export function AttachmentList({ attachments, compact }: { attachments: Attachment[]; compact?: boolean }) {
@@ -65,7 +75,8 @@ export function AttachmentList({ attachments, compact }: { attachments: Attachme
           >
             <span className={`${fi.color} text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0`}>{fi.icon}</span>
             <span className={`${compact ? "text-xs" : "text-sm"} text-slate-700 group-hover:text-indigo-600 truncate transition-colors`}>{att.name}</span>
-            {att.size != null && <span className="text-[10px] text-slate-400 shrink-0">{formatFileSize(att.size)}</span>}
+            {att.added_by && <span className="text-[10px] text-slate-400 shrink-0">{att.added_by}</span>}
+            {att.added_at && <span className="text-[10px] text-slate-400 shrink-0">{formatDate(att.added_at)}</span>}
             <svg className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 shrink-0 ml-auto transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
@@ -84,10 +95,14 @@ export function AttachmentUploader({
   attachments,
   onChange,
   compact,
+  currentUser,
+  hideLabel,
 }: {
   attachments: Attachment[];
   onChange: (attachments: Attachment[]) => void;
   compact?: boolean;
+  currentUser?: string | null;
+  hideLabel?: boolean;
 }) {
   const [urlInput, setUrlInput] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -104,11 +119,12 @@ export function AttachmentUploader({
         url,
         mimeType: file.type || undefined,
         size: file.size,
+        added_by: currentUser || undefined,
         added_at: new Date().toISOString(),
       });
     }
     onChange([...attachments, ...newAtts]);
-  }, [attachments, onChange]);
+  }, [attachments, onChange, currentUser]);
 
   const addUrl = useCallback(() => {
     const trimmed = urlInput.trim();
@@ -120,12 +136,13 @@ export function AttachmentUploader({
         id: nextAttachmentId(),
         name: decodeURIComponent(name),
         url: trimmed,
+        added_by: currentUser || undefined,
         added_at: new Date().toISOString(),
       },
     ]);
     setUrlInput("");
     setShowUrlInput(false);
-  }, [attachments, onChange, urlInput]);
+  }, [attachments, onChange, urlInput, currentUser]);
 
   const remove = useCallback((id: string) => {
     onChange(attachments.filter((a) => a.id !== id));
@@ -133,9 +150,11 @@ export function AttachmentUploader({
 
   return (
     <div>
-      <label className={`block font-medium text-gray-700 ${compact ? "text-xs mb-1" : "text-sm mb-1.5"}`}>
-        参考資料
-      </label>
+      {!hideLabel && (
+        <label className={`block font-medium text-gray-700 ${compact ? "text-xs mb-1" : "text-sm mb-1.5"}`}>
+          参考資料
+        </label>
+      )}
 
       {/* Existing attachments */}
       {attachments.length > 0 && (
@@ -154,7 +173,8 @@ export function AttachmentUploader({
                 >
                   {att.name}
                 </a>
-                {att.size != null && <span className="text-[10px] text-slate-400 shrink-0">{formatFileSize(att.size)}</span>}
+                {att.added_by && <span className="text-[10px] text-slate-400 shrink-0">{att.added_by}</span>}
+                {att.added_at && <span className="text-[10px] text-slate-400 shrink-0">{formatDate(att.added_at)}</span>}
                 <a href={att.url} target="_blank" rel="noopener noreferrer" className="p-0.5 rounded hover:bg-indigo-50 text-slate-400 hover:text-indigo-500 transition-colors shrink-0" title="別ウィンドウで開く">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />

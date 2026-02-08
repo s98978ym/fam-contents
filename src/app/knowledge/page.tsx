@@ -5,7 +5,7 @@ import { useCurrentUser } from "@/lib/user_context";
 import { useGoogleAuth } from "@/lib/use_google_auth";
 import { useGooglePicker, type PickedFolder } from "@/lib/use_google_picker";
 import type { KnowledgePost, KnowledgeComment, KnowledgeCategory, Attachment } from "@/types/content_package";
-import { AttachmentUploader } from "@/components/attachment_manager";
+import { AttachmentUploader, AttachmentList } from "@/components/attachment_manager";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -274,6 +274,7 @@ function PostCard({
   onTagClick,
   onArchive,
   onDelete,
+  onAttach,
   compact = false,
 }: {
   post: KnowledgePost;
@@ -284,6 +285,7 @@ function PostCard({
   onTagClick: (tag: string) => void;
   onArchive?: (postId: string, archived: boolean) => void;
   onDelete?: (postId: string) => void;
+  onAttach?: (postId: string, attachments: Attachment[]) => void;
   compact?: boolean;
 }) {
   const [showComments, setShowComments] = useState(false);
@@ -291,6 +293,7 @@ function PostCard({
   const [submitting, setSubmitting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showAttachUploader, setShowAttachUploader] = useState(false);
 
   const isLiked = currentUser ? post.likes.includes(currentUser) : false;
   const postComments = comments.filter((c) => c.post_id === post.id);
@@ -479,31 +482,34 @@ function PostCard({
           </div>
         )}
 
-        {/* Attachments (参考資料) */}
-        {post.attachments && post.attachments.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-[10px] font-semibold text-gray-400 mb-1.5">参考資料</p>
-            <div className="space-y-1">
-              {post.attachments.map((att: Attachment) => (
-                <a
-                  key={att.id}
-                  href={att.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-xs text-slate-600 hover:text-indigo-600 transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                  <span className="truncate">{att.name}</span>
-                  <svg className="w-3 h-3 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              ))}
+        {/* Attachments (参考資料) — 投稿後も誰でも追加可能 */}
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          {post.attachments && post.attachments.length > 0 && (
+            <div className="mb-2">
+              <AttachmentList attachments={post.attachments} compact />
             </div>
-          </div>
-        )}
+          )}
+          {onAttach && !showAttachUploader && (
+            <button
+              onClick={() => setShowAttachUploader(true)}
+              className="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+              参考資料を追加
+            </button>
+          )}
+          {onAttach && showAttachUploader && (
+            <AttachmentUploader
+              attachments={post.attachments || []}
+              onChange={(newAtts) => onAttach(post.id, newAtts)}
+              compact
+              currentUser={currentUser}
+              hideLabel
+            />
+          )}
+        </div>
       </div>
 
       {/* Actions */}
@@ -2311,6 +2317,17 @@ export default function KnowledgePage() {
     }
   };
 
+  const handleAttach = async (postId: string, attachments: Attachment[]) => {
+    const res = await fetch(`/api/knowledge/${postId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attachments }),
+    });
+    if (res.ok) {
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, attachments } : p));
+    }
+  };
+
   const handleNewPost = async (data: { title: string; body: string; tags: string[]; category: KnowledgeCategory; images: string[]; attachments?: Attachment[] }) => {
     if (!currentUser) return;
     try {
@@ -2612,6 +2629,7 @@ export default function KnowledgePage() {
                   onTagClick={handleTagClick}
                   onArchive={handleArchive}
                   onDelete={handleDelete}
+                  onAttach={handleAttach}
                 />
               ))
             )}

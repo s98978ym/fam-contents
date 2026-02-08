@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { sampleCampaigns, sampleVariants } from "@/lib/sample_data";
 import type { ChannelVariant, Campaign } from "@/types/content_package";
-import { AttachmentUploader, AttachmentList } from "@/components/attachment_manager";
+import { AttachmentUploader } from "@/components/attachment_manager";
 import type { Attachment } from "@/types/content_package";
 import { useTeam } from "@/contexts/team-context";
 
@@ -945,14 +945,6 @@ export default function CampaignsPage() {
                               />
                               {/* 参考資料 */}
                               <div className="mt-3 pt-3 border-t border-slate-100">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">参考資料</span>
-                                </div>
-                                {camp.attachments && camp.attachments.length > 0 && (
-                                  <div className="mb-2">
-                                    <AttachmentList attachments={camp.attachments} compact />
-                                  </div>
-                                )}
                                 <AttachmentUploader
                                   attachments={camp.attachments || []}
                                   onChange={(newAtts) => updateCampaign(camp.id, { attachments: newAtts })}
