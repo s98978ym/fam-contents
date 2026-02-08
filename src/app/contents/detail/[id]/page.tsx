@@ -293,22 +293,31 @@ export default function ContentDetailPage() {
         ) : (
           <div className="space-y-3">
             {variants.map((v) => (
-              <div key={v.id} className="bg-white rounded-lg border border-gray-200 p-4">
+              <Link
+                key={v.id}
+                href={`/contents/list/${v.id}`}
+                className="block bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all group"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{CHANNEL_LABELS[v.channel] ?? v.channel}</span>
+                    <span className="text-sm font-medium group-hover:text-blue-600 transition-colors">{CHANNEL_LABELS[v.channel] ?? v.channel}</span>
                     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[v.status] ?? "bg-gray-100"}`}>
                       {v.status}
                     </span>
                   </div>
-                  {v.assignee && (
-                    <span className="text-xs text-gray-400">担当: {v.assignee}</span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {v.assignee && (
+                      <span className="text-xs text-gray-400">担当: {v.assignee}</span>
+                    )}
+                    <svg className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </div>
                 {v.scheduled_at && (
                   <p className="text-xs text-gray-500">配信予定: {v.scheduled_at.slice(0, 16).replace("T", " ")}</p>
                 )}
-              </div>
+              </Link>
             ))}
           </div>
         )}
