@@ -431,14 +431,39 @@ export default function FolderDetailPage() {
   const handleSave = useCallback(async () => {
     if (!preview) return;
     setSaving(true);
-    const res = await fetch("/api/variants", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel: preview.channel, content_id: `folder_${folderId}`, ...preview.generatedContent }),
-    });
-    if (res.ok) setSaved(true);
-    setSaving(false);
-  }, [preview, folderId]);
+    try {
+      // 1. ContentPackage を作成
+      const title = (preview.generatedContent.title as string)
+        || (preview.generatedContent.title_option1 as string)
+        || folder?.name
+        || "生成コンテンツ";
+      const contentRes = await fetch("/api/contents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          summary: (preview.generatedContent.lead as string) || (preview.generatedContent.caption as string) || title,
+          target_channels: [preview.channel],
+          created_by: "system",
+        }),
+      });
+      let contentId = `folder_${folderId}`;
+      if (contentRes.ok) {
+        const pkg = await contentRes.json();
+        contentId = pkg.content_id;
+      }
+
+      // 2. ChannelVariant を作成（ContentPackageに紐付け）
+      const varRes = await fetch("/api/variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: preview.channel, content_id: contentId, ...preview.generatedContent }),
+      });
+      if (varRes.ok) setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }, [preview, folderId, folder]);
 
   const handlePublish = useCallback(() => { window.location.href = "/contents/list"; }, []);
 
