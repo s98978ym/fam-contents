@@ -55,6 +55,97 @@ function isUrlString(s: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// File Preview (別ウィンドウで閲覧)
+// ---------------------------------------------------------------------------
+
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+const VIEWER_STYLE = `*{margin:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#334155}
+.bar{background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 20px;display:flex;align-items:center;gap:12px}
+.bar .name{font-size:14px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .meta{font-size:11px;color:#94a3b8}
+.bar .dl{font-size:12px;color:#6366f1;text-decoration:none;font-weight:500;padding:6px 12px;border:1px solid #c7d2fe;border-radius:6px}
+.bar .dl:hover{background:#eef2ff}
+.content{display:flex;justify-content:center;align-items:center;min-height:calc(100vh - 53px);padding:20px;background:#1e293b}
+.content.light{background:#f8fafc}
+.content img{max-width:100%;max-height:calc(100vh - 93px);object-fit:contain;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.3)}
+.content video{max-width:100%;max-height:calc(100vh - 93px);border-radius:4px}
+.content embed,.content iframe{width:100%;height:calc(100vh - 53px);border:none}
+.content pre{width:100%;max-width:900px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px;font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:calc(100vh - 93px)}
+.fallback{text-align:center;color:#94a3b8}
+.fallback .icon{font-size:64px;margin-bottom:16px}
+.fallback .fname{font-size:18px;font-weight:600;color:#475569;margin-bottom:8px}
+.fallback .hint{font-size:13px;margin-bottom:20px}
+.fallback .btn{display:inline-block;padding:10px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:500}
+.fallback .btn:hover{background:#4f46e5}`;
+
+function buildBar(name: string, url: string, meta?: string): string {
+  return `<div class="bar"><span class="name">${esc(name)}</span>${meta ? `<span class="meta">${esc(meta)}</span>` : ""}<a class="dl" href="${esc(url)}" download="${esc(name)}">ダウンロード</a></div>`;
+}
+
+export function openPreview(att: Attachment): void {
+  // External URLs: open directly
+  if (att.url.startsWith("http")) {
+    window.open(att.url, "_blank", "noopener");
+    return;
+  }
+
+  const mime = att.mimeType || "";
+  const meta = [att.added_by, att.size != null ? formatFileSize(att.size) : ""].filter(Boolean).join(" · ");
+
+  if (mime.startsWith("image/")) {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}</style></head><body>${buildBar(att.name, att.url, meta)}<div class="content"><img src="${esc(att.url)}" alt="${esc(att.name)}"></div></body></html>`);
+    w.document.close();
+    return;
+  }
+
+  if (mime === "application/pdf") {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}.content{padding:0}</style></head><body>${buildBar(att.name, att.url, meta)}<div class="content light"><embed src="${esc(att.url)}" type="application/pdf"></div></body></html>`);
+    w.document.close();
+    return;
+  }
+
+  if (mime.startsWith("video/")) {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}</style></head><body>${buildBar(att.name, att.url, meta)}<div class="content"><video src="${esc(att.url)}" controls autoplay></video></div></body></html>`);
+    w.document.close();
+    return;
+  }
+
+  if (mime.startsWith("audio/")) {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}</style></head><body>${buildBar(att.name, att.url, meta)}<div class="content light"><audio src="${esc(att.url)}" controls autoplay style="width:400px"></audio></div></body></html>`);
+    w.document.close();
+    return;
+  }
+
+  if (mime.startsWith("text/") || mime === "application/json" || mime === "application/xml") {
+    fetch(att.url)
+      .then((r) => r.text())
+      .then((text) => {
+        const w = window.open("", "_blank");
+        if (!w) return;
+        w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}</style></head><body>${buildBar(att.name, att.url, meta)}<div class="content light"><pre>${esc(text)}</pre></div></body></html>`);
+        w.document.close();
+      });
+    return;
+  }
+
+  // Fallback: file info page with download button
+  const fi = getFileIcon(mime);
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(att.name)}</title><style>${VIEWER_STYLE}</style></head><body>${buildBar(att.name, att.url, meta)}<div class="content light"><div class="fallback"><div class="icon">${fi.icon === "PDF" ? "📄" : fi.icon === "XLS" ? "📊" : fi.icon === "PPT" ? "📽" : fi.icon === "DOC" ? "📝" : "📎"}</div><div class="fname">${esc(att.name)}</div><div class="hint">このファイル形式はブラウザでプレビューできません</div><a class="btn" href="${esc(att.url)}" download="${esc(att.name)}">ダウンロードして開く</a></div></div></body></html>`);
+  w.document.close();
+}
+
+// ---------------------------------------------------------------------------
 // AttachmentList (read-only display with added_by/timestamp)
 // ---------------------------------------------------------------------------
 
@@ -66,12 +157,11 @@ export function AttachmentList({ attachments, compact }: { attachments: Attachme
       {attachments.map((att) => {
         const fi = getFileIcon(att.mimeType);
         return (
-          <a
+          <button
             key={att.id}
-            href={att.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`flex items-center gap-2 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors group ${compact ? "px-2 py-1.5" : "px-3 py-2"}`}
+            type="button"
+            onClick={() => openPreview(att)}
+            className={`w-full flex items-center gap-2 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors group text-left ${compact ? "px-2 py-1.5" : "px-3 py-2"}`}
           >
             <span className={`${fi.color} text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0`}>{fi.icon}</span>
             <span className={`${compact ? "text-xs" : "text-sm"} text-slate-700 group-hover:text-indigo-600 truncate transition-colors`}>{att.name}</span>
@@ -80,7 +170,7 @@ export function AttachmentList({ attachments, compact }: { attachments: Attachme
             <svg className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 shrink-0 ml-auto transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
-          </a>
+          </button>
         );
       })}
     </div>
@@ -164,22 +254,21 @@ export function AttachmentUploader({
             return (
               <div key={att.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5 group">
                 <span className={`${fi.color} text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0`}>{fi.icon}</span>
-                <a
-                  href={att.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-slate-700 hover:text-indigo-600 truncate transition-colors flex-1"
+                <button
+                  type="button"
+                  onClick={() => openPreview(att)}
+                  className="text-xs text-slate-700 hover:text-indigo-600 truncate transition-colors flex-1 text-left"
                   title={att.name}
                 >
                   {att.name}
-                </a>
+                </button>
                 {att.added_by && <span className="text-[10px] text-slate-400 shrink-0">{att.added_by}</span>}
                 {att.added_at && <span className="text-[10px] text-slate-400 shrink-0">{formatDate(att.added_at)}</span>}
-                <a href={att.url} target="_blank" rel="noopener noreferrer" className="p-0.5 rounded hover:bg-indigo-50 text-slate-400 hover:text-indigo-500 transition-colors shrink-0" title="別ウィンドウで開く">
+                <button type="button" onClick={() => openPreview(att)} className="p-0.5 rounded hover:bg-indigo-50 text-slate-400 hover:text-indigo-500 transition-colors shrink-0" title="別ウィンドウで開く">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
-                </a>
+                </button>
                 <button onClick={() => remove(att.id)} className="p-0.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors shrink-0" title="削除">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
